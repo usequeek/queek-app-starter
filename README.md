@@ -26,6 +26,12 @@ queek app release my-app 1.2.0
 queek app submit my-app     # → in_review
 ```
 
+CI deploys on every main push (`.github/workflows/ci.yml`): create a per-app
+App Automation Token on the Developer page (Dashboard → Developers → your app
+→ Automation tokens) and store it as the masked repo secret
+`QUEEK_APP_AUTOMATION_TOKEN`. The token deploys, releases and submits that one
+app only — a 403 means it belongs to a different app.
+
 `queek.app.toml` is the local source of truth — same names as the server
 manifest, grouped (`[listing]`, `[access]`, `[webhooks]`, `[app]`,
 `[[settings]]`, `[extensions]`, `[dashboard]`). Secrets never live there:

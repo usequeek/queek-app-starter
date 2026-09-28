@@ -30,3 +30,22 @@ jobs:
       # Build only, no push, no deploy: this is where the Dockerfile is
       # verified (PRs included). Deploys pull GHCR images in Dokploy.
       - run: docker build -f Dockerfile .
+
+  # Ship the manifest to Queek on every main push: version N+1, no login —
+  # QUEEK_APP_AUTOMATION_TOKEN (repo secret, masked) is a per-app App
+  # Automation Token minted on the Developer page (Dashboard → Developers →
+  # your app → Automation tokens). A 403 here means the token belongs to a
+  # different app. NOTE: activates once @usequeek/cli is published to npm.
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [verify]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g @usequeek/cli
+      - run: queek app deploy
+        env:
+          QUEEK_APP_AUTOMATION_TOKEN: ${{ secrets.QUEEK_APP_AUTOMATION_TOKEN }}
