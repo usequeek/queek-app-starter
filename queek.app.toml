@@ -1,0 +1,29 @@
+slug = "my-app"
+name = "My App"
+version = "1.0.0"
+distribution = "public"
+icon = "wave"
+developer = "You"
+
+[listing]
+description = "What your app does, in one sentence."
+tagline = "One line for the listing."
+
+[access]
+scopes = ["merchant-business_profile-read"]
+
+[webhooks]
+topics = ["orders/updated"]
+url = "https://my-app.apps.queek.com.ng/webhooks"
+
+[app]
+install_url = "https://my-app.apps.queek.com.ng/install"
+uninstall_url = "https://my-app.apps.queek.com.ng/uninstall"
+settings_url = "https://my-app.apps.queek.com.ng/settings"
+
+[[settings]]
+key = "greeting"
+label = "Greeting"
+type = "string"
+required = false
+help = "Logged when an order update arrives."
