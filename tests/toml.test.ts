@@ -228,6 +228,11 @@ describe("queek.app.toml mirror", () => {
     expect(validateManifest(toManifest(doc))).toEqual([]);
   });
 
+  it("carries no version (Shopify parity: backend auto-assigns, --version names)", () => {
+    const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
+    expect(doc.version).toBeUndefined();
+  });
+
   it("maps the groups onto flat manifest names", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     const manifest = toManifest(doc);

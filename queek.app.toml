@@ -1,6 +1,5 @@
 slug = "my-app"
 name = "My App"
-version = "1.0.0"
 distribution = "public"
 icon = "wave"
 developer = "You"
