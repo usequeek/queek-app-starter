@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
 import { describe, expect, it } from "vitest";
+import { APP_SLUG, DEFAULT_BASE_URL } from "../src/config.js";
 
 /**
  * PARTIAL MIRROR — NOT the backend validator. This starter's queek.app.toml,
@@ -236,10 +237,12 @@ describe("queek.app.toml mirror", () => {
   it("maps the groups onto flat manifest names", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     const manifest = toManifest(doc);
-    expect(manifest.slug).toBe("my-app");
+    // Slug-derived: `npm create` renames slug + base URL, and the scaffold
+    // must stay green — so expect the rename, never the template value.
+    expect(manifest.slug).toBe(APP_SLUG);
     expect(manifest.scopes).toEqual(["merchant-business_profile-read"]);
     expect(manifest.webhook_topics).toEqual(["orders/updated"]);
-    expect(manifest.webhook_url).toBe("https://my-app.apps.queek.com.ng/webhooks");
-    expect(manifest.install_url).toBe("https://my-app.apps.queek.com.ng/install");
+    expect(manifest.webhook_url).toBe(`${DEFAULT_BASE_URL}/webhooks`);
+    expect(manifest.install_url).toBe(`${DEFAULT_BASE_URL}/install`);
   });
 });
