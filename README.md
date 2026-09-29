@@ -9,7 +9,7 @@ A [Queek](https://usequeek.com) installable app, from
 npm install
 cp .env.example .env   # fill in QUEEK_APP_SECRET + APP_ENCRYPTION_KEY
 npm run build && npm start   # terminal 1: the app server
-queek login                  # once: browser OAuth for a developer token
+queek auth login             # once: browser OAuth for a developer token
 queek app dev                # terminal 2: tunnel + test-store install + watch
 ```
 
@@ -20,7 +20,7 @@ server itself (`npm start`) stays yours to run.
 ## Deploy & submit
 
 ```bash
-queek app deploy            # toml → version N+1 (secret shown once on first registration)
+queek app deploy            # toml → version N+1 (secret shown once on first registration, interactive terminal only)
 queek app versions list my-app
 queek app release my-app 1.2.0
 queek app submit my-app     # → in_review
@@ -30,8 +30,8 @@ CI deploys on main pushes that carry the masked repo secret
 `QUEEK_APP_AUTOMATION_TOKEN` (`.github/workflows/ci.yml`, otherwise the step
 skips): create a per-app App Automation Token on the Developer page
 (Dashboard → Developers → your app → Automation tokens). The token deploys,
-releases and submits that one app only — a 403 means it belongs to a
-different app.
+releases and submits that one app only — a 401/403 means it is outside that
+app's grant (never a dead session, never a login prompt).
 
 `queek.app.toml` is the local source of truth — same names as the server
 manifest, grouped (`[listing]`, `[access]`, `[webhooks]`, `[app]`,
