@@ -26,11 +26,12 @@ queek app release my-app 1.2.0
 queek app submit my-app     # → in_review
 ```
 
-CI deploys on every main push (`.github/workflows/ci.yml`): create a per-app
-App Automation Token on the Developer page (Dashboard → Developers → your app
-→ Automation tokens) and store it as the masked repo secret
-`QUEEK_APP_AUTOMATION_TOKEN`. The token deploys, releases and submits that one
-app only — a 403 means it belongs to a different app.
+CI deploys on main pushes that carry the masked repo secret
+`QUEEK_APP_AUTOMATION_TOKEN` (`.github/workflows/ci.yml`, otherwise the step
+skips): create a per-app App Automation Token on the Developer page
+(Dashboard → Developers → your app → Automation tokens). The token deploys,
+releases and submits that one app only — a 403 means it belongs to a
+different app.
 
 `queek.app.toml` is the local source of truth — same names as the server
 manifest, grouped (`[listing]`, `[access]`, `[webhooks]`, `[app]`,
@@ -41,7 +42,8 @@ manifest, grouped (`[listing]`, `[access]`, `[webhooks]`, `[app]`,
 ## Routes
 
 `GET /health` (Dokploy check) · `/install` · `/uninstall` · `/settings`
-(handoff, signature-verified) · `POST /webhooks` (`orders/updated`).
+(handoff, signature-verified) · `POST /webhooks` (`orders/updated`) ·
+`GET /manifest.json` (the toml rendered with `APP_BASE_URL`).
 
 Installations live in SQLite (`QUEEK_DB_PATH`, `./data/my-app.db` locally —
 development only). Production takes `DATABASE_URL` (Postgres, own database)

@@ -1,7 +1,14 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, renderManifest, staticManifestFromToml } from "../src/config.js";
 
 const VALID_KEY = Buffer.alloc(32, 5).toString("base64");
+// Ephemeral test-only RSA key (generated per run, never committed, never real).
+const { privateKey: TEST_PRIVATE_KEY } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+});
 
 function env(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   return {
@@ -9,6 +16,8 @@ function env(overrides: Record<string, string | undefined> = {}): NodeJS.Process
     PORT: "3000",
     QUEEK_APP_SECRET: "whsec_dGVzdGFwcHNlY3JldHRlc3RhcHBzZWNyZXQ=",
     APP_ENCRYPTION_KEY: VALID_KEY,
+    APP_KEY_ID: "test-kid-1",
+    APP_PRIVATE_KEY: TEST_PRIVATE_KEY,
     ...overrides,
   } as NodeJS.ProcessEnv;
 }
@@ -43,5 +52,33 @@ describe("strict boot config", () => {
     expect(() => loadConfig(env({ QUEEK_APP_SECRET: "" }))).toThrow(/QUEEK_APP_SECRET/);
     expect(() => loadConfig(env({ APP_ENCRYPTION_KEY: "" }))).toThrow(/APP_ENCRYPTION_KEY/);
     expect(() => loadConfig(env({ APP_ENCRYPTION_KEY: "too-short" }))).toThrow(/APP_ENCRYPTION_KEY/);
+  });
+
+  it("rejects a missing or unparseable app key pair", () => {
+    expect(() => loadConfig(env({ APP_KEY_ID: "" }))).toThrow(/APP_KEY_ID/);
+    expect(() => loadConfig(env({ APP_PRIVATE_KEY: "" }))).toThrow(/APP_PRIVATE_KEY/);
+    expect(() => loadConfig(env({ APP_PRIVATE_KEY: "not-a-pem" }))).toThrow(/APP_PRIVATE_KEY/);
+  });
+});
+
+describe("static manifest from queek.app.toml", () => {
+  const doc = {
+    slug: "my-app",
+    access: { scopes: ["merchant-business_profile-read"] },
+    webhooks: { topics: ["orders/updated"], url: "https://my-app.apps.queek.com.ng/webhooks" },
+    app: { install_url: "https://my-app.apps.queek.com.ng/install" },
+  };
+
+  it("flattens the groups without validating", () => {
+    const manifest = staticManifestFromToml(doc);
+    expect(manifest.slug).toBe("my-app");
+    expect(manifest.scopes).toEqual(["merchant-business_profile-read"]);
+    expect(manifest.webhook_topics).toEqual(["orders/updated"]);
+  });
+
+  it("renders staging URLs from APP_BASE_URL", () => {
+    const rendered = renderManifest(staticManifestFromToml(doc), "https://staging.example.test");
+    expect(rendered.install_url).toBe("https://staging.example.test/install");
+    expect(rendered.webhook_url).toBe("https://staging.example.test/webhooks");
   });
 });

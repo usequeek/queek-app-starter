@@ -5,8 +5,9 @@
 
 FROM node:22.23.3-alpine AS build
 WORKDIR /repo
-COPY package.json ./
-RUN npm install
+# The committed lockfile pins every dependency (incl. @usequeek/app-sdk from npm).
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 RUN npm run build
 RUN npm prune --omit=dev
