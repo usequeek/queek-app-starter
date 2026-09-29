@@ -6,15 +6,14 @@ import {
   buildInstallationRecord,
   createAppTokenProvider,
   createInstallationClient,
-  createInstallHandlers,
   createLogger,
-  createWebhookHandler,
   type InstallEnvelope,
   InvalidApiBaseError,
   loadAppCredential,
   QueekApiError,
   SqliteInstallationStore,
 } from "@usequeek/app-sdk";
+import { createInstallHandlers, createWebhookHandler } from "@usequeek/app-sdk/hono";
 import { Hono } from "hono";
 import { parse as parseToml } from "smol-toml";
 import { APP_SLUG, loadConfig, renderManifest, staticManifestFromToml } from "./config.js";

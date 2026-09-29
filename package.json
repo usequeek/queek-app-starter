@@ -16,13 +16,14 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
-    "@usequeek/app-sdk": "^0.4.0",
+    "@usequeek/app-sdk": "^0.5.1",
     "hono": "4.13.9",
     "smol-toml": "^1.4.2"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@types/node": "22.20.4",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "vitest": "3.2.4"
   },

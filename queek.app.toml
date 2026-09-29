@@ -26,3 +26,7 @@ label = "Greeting"
 type = "string"
 required = false
 help = "Logged when an order update arrives."
+
+[dev]
+command = "tsx watch src/index.ts"
+port = 3000

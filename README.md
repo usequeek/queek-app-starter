@@ -7,15 +7,19 @@ A [Queek](https://usequeek.com) installable app, from
 
 ```bash
 npm install
-cp .env.example .env   # fill in QUEEK_APP_SECRET + APP_ENCRYPTION_KEY
-npm run build && npm start   # terminal 1: the app server
-queek auth login             # once: browser OAuth for a developer token
-queek app dev                # terminal 2: tunnel + test-store install + watch
+npm run dev   # the whole loop: tunnel + test-store install + your app, started with the dev env
 ```
 
-`queek app dev` registers `queek.app.toml` as a `development` build, installs it
-on an owned test store, and re-registers whenever the toml changes. The app
-server itself (`npm start`) stays yours to run.
+`queek app dev` registers `queek.app.toml` as a `development` build, installs
+it on an owned test store, then starts the app from the toml's `[dev]` table
+(`tsx watch src/index.ts`) with the dev env injected: `APP_BASE_URL` (the
+tunnel origin), `PORT`, `NODE_ENV=development`, plus the signing secret,
+keypair and encryption key from `.queek/.env.local` (minted on first run,
+never printed). Your project's own `.env` fills the rest. Output streams
+prefixed with `[app]`; a crash restarts with backoff. Save `queek.app.toml`
+to re-register; `Ctrl+C` stops the app and the tunnel. When the app answers
+`/health`, the command prints the store-admin and storefront links — open
+them.
 
 ## Deploy & submit
 
