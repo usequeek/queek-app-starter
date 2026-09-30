@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/data"]
+    "includes": ["**", "!**/dist", "!**/dist-admin", "!**/node_modules", "!**/data"]
   },
   "formatter": {
     "enabled": true,
@@ -29,6 +29,11 @@
   "javascript": {
     "formatter": {
       "quoteStyle": "double"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }

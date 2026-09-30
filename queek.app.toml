@@ -27,6 +27,13 @@ type = "string"
 required = false
 help = "Logged when an order update arrives."
 
+[extensions]
+merchant_page_url = "https://my-app.apps.queek.com.ng/admin"
+
+[[extensions.nav]]
+label = "Home"
+path = "/admin"
+
 [dev]
 command = "tsx watch src/index.ts"
 port = 3000

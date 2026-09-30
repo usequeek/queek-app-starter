@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import {
   createAppTokenProvider,
+  createInstallationClient,
   createLogger,
   loadAppCredential,
   SqliteInstallationStore,
@@ -11,6 +12,7 @@ import {
 import { createInstallHandlers, createWebhookHandler } from "@usequeek/app-sdk/hono";
 import { Hono } from "hono";
 import { parse as parseToml } from "smol-toml";
+import { createAdminRouter, DEFAULT_ADMIN_UI_DIR } from "./admin.js";
 import { APP_SLUG, loadConfig, renderManifest, staticManifestFromToml } from "./config.js";
 import { buildLifecycle } from "./lifecycle.js";
 
@@ -69,6 +71,26 @@ const webhooks = createWebhookHandler({
   },
 });
 app.route("/webhooks", webhooks);
+
+// The embedded admin (React, admin-ui/ built to dist-admin/): the merchant
+// page at GET /admin, the session exchange, and the JSON API the page calls
+// with its own session bearer. Same store, same token minting, same logger.
+app.route(
+  "/",
+  createAdminRouter({
+    installations: store,
+    clientFor: (installation) =>
+      createInstallationClient({
+        installationId: installation.installationId,
+        apiBase: installation.apiBase,
+        tokens,
+      }),
+    log,
+    dashboardOrigins: config.dashboardOrigins,
+    devPreview: process.env.NODE_ENV === "development",
+    adminUiDir: DEFAULT_ADMIN_UI_DIR,
+  }),
+);
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   log.info("listening", { port: info.port });

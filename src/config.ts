@@ -13,6 +13,38 @@ export interface AppConfig {
   appKeyId: string;
   appPrivateKey: string;
   dbPath: string;
+  /**
+   * Exact origins of the Queek merchant dashboard that frames the admin
+   * page (`QUEEK_DASHBOARD_ORIGINS`, comma-separated https origins): the
+   * `frame-ancestors` list and the only postMessage peers. Optional —
+   * defaults to the production dashboard so `queek app dev` works without
+   * extra env.
+   */
+  dashboardOrigins: string[];
+}
+
+/** The production dashboard origin (the default admin frame-ancestor). */
+export const DEFAULT_DASHBOARD_ORIGIN = "https://dashboard.usequeek.com";
+
+/** `https://host[:port]` origins only — no path, query, userinfo or wildcard. */
+export function parseOrigins(raw: string, name: string): string[] {
+  const origins = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+  if (origins.length === 0) throw new Error(`Missing required env ${name} (see .env.example).`);
+  return origins.map((value) => {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new Error(`Invalid ${name} entry ${JSON.stringify(value)}: must be an https origin.`);
+    }
+    if (url.protocol !== "https:" || url.origin !== value.replace(/\/+$/, "") || url.username !== "") {
+      throw new Error(`Invalid ${name} entry ${JSON.stringify(value)}: must be a bare https origin.`);
+    }
+    return url.origin;
+  });
 }
 
 /**
@@ -176,5 +208,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     appKeyId,
     appPrivateKey,
     dbPath: env.QUEEK_DB_PATH ?? "./data/my-app.db",
+    dashboardOrigins: parseOrigins(
+      env.QUEEK_DASHBOARD_ORIGINS ?? DEFAULT_DASHBOARD_ORIGIN,
+      "QUEEK_DASHBOARD_ORIGINS",
+    ),
   };
 }

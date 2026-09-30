@@ -43,11 +43,23 @@ manifest, grouped (`[listing]`, `[access]`, `[webhooks]`, `[app]`,
 `type = "secret"` settings declare a slot only, and the registration secret
 (`whsec_…`) lives in `.queek/.env.local` (gitignored).
 
+## Admin UI
+
+The embedded merchant page is a React + shadcn SPA (`admin-ui/`, Queek
+registry theme) served by Hono at `GET /admin` — one settings form plus an
+example Merchant API call. Build it with `npm run build:admin` (output:
+`dist-admin/`, gitignored); the server exchanges the dashboard token at
+`POST /admin/session` and guards `GET|PUT /admin/app/api/settings` and
+`GET /admin/app/api/store` with its own short session bearer. Local preview
+(`queek app dev` + open `/admin` directly) signs in as the dev install.
+
 ## Routes
 
 `GET /health` (Dokploy check) · `/install` · `/uninstall` · `/settings`
 (handoff, signature-verified) · `POST /webhooks` (`orders/updated`) ·
-`GET /manifest.json` (the toml rendered with `APP_BASE_URL`).
+`GET /manifest.json` (the toml rendered with `APP_BASE_URL`) ·
+`GET /admin` (embedded React page) · `POST /admin/session` ·
+`/admin/app/api/*` (session-guarded JSON).
 
 Installations live in SQLite (`QUEEK_DB_PATH`, `./data/my-app.db` locally —
 development only). Production takes `DATABASE_URL` (Postgres, own database)
