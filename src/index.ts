@@ -3,20 +3,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import {
-  buildInstallationRecord,
   createAppTokenProvider,
-  createInstallationClient,
   createLogger,
-  type InstallEnvelope,
-  InvalidApiBaseError,
   loadAppCredential,
-  QueekApiError,
   SqliteInstallationStore,
 } from "@usequeek/app-sdk";
 import { createInstallHandlers, createWebhookHandler } from "@usequeek/app-sdk/hono";
 import { Hono } from "hono";
 import { parse as parseToml } from "smol-toml";
 import { APP_SLUG, loadConfig, renderManifest, staticManifestFromToml } from "./config.js";
+import { buildLifecycle } from "./lifecycle.js";
 
 const config = loadConfig();
 const log = createLogger({ service: `queek-app-${APP_SLUG}` });
@@ -48,42 +44,13 @@ const app = new Hono();
 app.get("/health", (c) => c.json({ ok: true, app: APP_SLUG, time: new Date().toISOString() }));
 app.get("/manifest.json", (c) => c.json(renderManifest(staticManifest, config.appBaseUrl)));
 
-async function onInstall(envelope: InstallEnvelope): Promise<void> {
-  const { data } = envelope;
-  // Save first, then prove the minted credential works BEFORE answering 2xx:
-  // GET /store through the installation client. A failed proof on a fresh
-  // row purges it (non-2xx → Queek revokes the install). Only the store p_id
-  // is logged — never a token.
-  const existing = await store.getInstallation(data.installation.id);
-  await store.saveInstallation(buildInstallationRecord(data));
-  const client = createInstallationClient({
-    installationId: data.installation.id,
-    apiBase: data.api_base,
-    tokens,
-  });
-  let storePid: string;
-  try {
-    const profile = (await client.getStore()) as unknown as Record<string, unknown>;
-    const nested = profile.data as Record<string, unknown> | undefined;
-    const pid = nested?.p_id ?? profile.p_id;
-    storePid = typeof pid === "string" ? pid : "unknown";
-  } catch (error) {
-    if (!existing) await store.deleteInstallation(data.installation.id);
-    log.error("install proof-call failed", { installation: data.installation.p_id });
-    if (error instanceof QueekApiError || error instanceof InvalidApiBaseError) throw error;
-    throw new Error("Merchant API proof-call failed.");
-  }
-  log.info("installed", { store: storePid, installation: data.installation.p_id });
-}
+const lifecycle = buildLifecycle({ store, tokens, log });
 
 const handoff = createInstallHandlers({
   appSecret: config.appSecret,
   store,
-  onInstall,
-  onUninstall: async (envelope) => {
-    await store.deleteInstallation(envelope.data.installation.id);
-    log.info("uninstalled", { installation: envelope.data.installation.p_id });
-  },
+  onInstall: lifecycle.onInstall,
+  onUninstall: lifecycle.onUninstall,
 });
 // The handoff app already declares /install, /uninstall and /settings —
 // merge it at root. The webhook app declares POST / and mounts at /webhooks.
