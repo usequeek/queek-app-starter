@@ -27,6 +27,10 @@ import { APP_SLUG, DEFAULT_BASE_URL } from "../src/config.js";
  *   pricing, developer_url, privacy_url, support_url, scopes, webhook_topics,
  *   settings, install_url, uninstall_url, settings_url, webhook_url
  *   (unknown rejected)
+ * - extensions: ONLY proxy/blocks/merchant_page_url (the live
+ *   `AppManifestValidator::validateExtensions` rejectUnknown list) — nav is
+ *   refused until backend item 1 (extensions.nav) lands; merchant_page_url
+ *   and proxy.url must be https
  * - slug `^[a-z0-9][a-z0-9-]{1,63}$`, name ≤120, icon `^[a-z0-9_-]+$` ≤64
  * - scopes non-empty; each a known merchant permission and NOT under a
  *   non-delegable prefix (merchant-api_keys/roles/users/employees/pos/apps-)
@@ -92,6 +96,7 @@ const TOP_LEVEL_KEYS = new Set([
   "uninstall_url",
   "settings_url",
   "webhook_url",
+  "extensions",
 ]);
 
 interface TomlDoc {
@@ -108,6 +113,7 @@ interface TomlDoc {
   webhooks?: { topics?: unknown; url?: unknown };
   app?: Record<string, unknown>;
   settings?: unknown;
+  extensions?: Record<string, unknown>;
 }
 
 /** The grouped toml flattened onto the manifest shape the CLI deploys. */
@@ -131,6 +137,7 @@ function toManifest(doc: TomlDoc): Record<string, unknown> {
   if (doc.webhooks?.url !== undefined) manifest.webhook_url = doc.webhooks.url;
   Object.assign(manifest, doc.app ?? {});
   if (doc.settings !== undefined) manifest.settings = doc.settings;
+  if (doc.extensions !== undefined) manifest.extensions = doc.extensions;
   return manifest;
 }
 
@@ -209,6 +216,36 @@ function validateManifest(manifest: Record<string, unknown>): string[] {
       });
     }
   }
+  const extensions = manifest.extensions;
+  if (extensions !== undefined) {
+    if (typeof extensions !== "object" || extensions === null || Array.isArray(extensions)) {
+      errors.push("extensions must be a table.");
+    } else {
+      for (const key of Object.keys(extensions)) {
+        if (!["proxy", "blocks", "merchant_page_url"].includes(key)) {
+          errors.push(
+            `Unknown extensions key '${key}': the backend allows only proxy/blocks/merchant_page_url (nav lands with backend item 1).`,
+          );
+        }
+      }
+      const record = extensions as Record<string, unknown>;
+      if (record.merchant_page_url !== undefined && typeof record.merchant_page_url !== "string") {
+        errors.push("extensions.merchant_page_url must be a string.");
+      }
+      const proxy = record.proxy;
+      if (proxy !== undefined) {
+        if (typeof proxy !== "object" || proxy === null || Array.isArray(proxy)) {
+          errors.push("extensions.proxy must be a table.");
+        } else {
+          for (const key of Object.keys(proxy)) {
+            if (!["url", "subpath", "share_customer_id"].includes(key)) {
+              errors.push(`Unknown field '${key}' in extensions.proxy.`);
+            }
+          }
+        }
+      }
+    }
+  }
   for (const field of ["install_url", "uninstall_url", "settings_url", "webhook_url"]) {
     const value = manifest[field];
     if (value === undefined) continue;
@@ -218,6 +255,12 @@ function validateManifest(manifest: Record<string, unknown>): string[] {
   }
   if (manifest.install_url === undefined) errors.push("The install_url field is required.");
   if (manifest.uninstall_url === undefined) errors.push("The uninstall_url field is required.");
+  const ext = manifest.extensions as Record<string, unknown> | undefined;
+  for (const value of [ext?.merchant_page_url, (ext?.proxy as Record<string, unknown> | undefined)?.url]) {
+    if (value !== undefined && (typeof value !== "string" || !value.startsWith("https://"))) {
+      errors.push("extensions URLs (merchant_page_url, proxy.url) must be https URLs.");
+    }
+  }
   return errors;
 }
 
@@ -232,6 +275,22 @@ describe("queek.app.toml mirror", () => {
   it("carries no version (Shopify parity: backend auto-assigns, --version names)", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     expect(doc.version).toBeUndefined();
+  });
+
+  it("keeps extensions deployable: merchant page only, no nav yet", () => {
+    const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
+    const manifest = toManifest(doc);
+    const extensions = manifest.extensions as Record<string, unknown>;
+    expect(extensions.merchant_page_url).toBe(`${DEFAULT_BASE_URL}/admin`);
+    expect(extensions.nav).toBeUndefined();
+  });
+
+  it("refuses extensions.nav locally — the live validator would refuse the deploy", () => {
+    const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
+    const manifest = toManifest(doc);
+    const extensions = manifest.extensions as Record<string, unknown>;
+    const withNav = { ...manifest, extensions: { ...extensions, nav: [{ label: "Home", path: "/admin" }] } };
+    expect(validateManifest(withNav).some((error) => error.includes("nav"))).toBe(true);
   });
 
   it("maps the groups onto flat manifest names", () => {

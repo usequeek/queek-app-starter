@@ -89,6 +89,20 @@ const GREETING_MAX_LENGTH = 280;
 type AdminEnv = { Variables: { installation: InstallationRecord } };
 
 /**
+ * The direct socket peer (`@hono/node-server` exposes the incoming message
+ * on `c.env`). Undefined in-process (tests) and on runtimes that do not set
+ * it — callers fall back to the proxy headers, then "unknown".
+ */
+function socketRemoteAddress(c: Context): string | undefined {
+  const env = (c.env ?? {}) as Record<string, unknown>;
+  if (typeof env.incoming !== "object" || env.incoming === null) return undefined;
+  const socket = (env.incoming as Record<string, unknown>).socket;
+  if (typeof socket !== "object" || socket === null) return undefined;
+  const address = (socket as Record<string, unknown>).remoteAddress;
+  return typeof address === "string" && address !== "" ? address : undefined;
+}
+
+/**
  * The admin router: `GET /admin` (the built React page), `POST
  * /admin/session`, and under `/admin/app/api`: `settings` (the starter's
  * one settings form) and `store` (the example Merchant API call).
@@ -191,8 +205,14 @@ export function createAdminRouter(deps: AdminDeps): Hono<AdminEnv> {
 
   // The ONE server-side verification of the dashboard token.
   app.post(`${ADMIN_PAGE_PATH}/session`, async (c) => {
+    // Throttle peer: the direct socket first (unspoofable), then the proxy
+    // headers, so headerless clients (health probes, in-process tests) do not
+    // all share one "unknown" bucket that a single abuser could exhaust.
     const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-    const clientKey = forwarded || c.req.header("x-real-ip") || "unknown";
+    const clientKey =
+      [socketRemoteAddress(c), forwarded, c.req.header("x-real-ip")].find(
+        (peer) => typeof peer === "string" && peer !== "",
+      ) ?? "unknown";
     const limited = sessionThrottled(clientKey);
     if (limited) {
       log.warn("admin session throttled", { client: clientKey });

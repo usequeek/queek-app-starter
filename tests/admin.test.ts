@@ -212,6 +212,26 @@ describe("admin store API", () => {
   });
 });
 
+describe("admin session throttle", () => {
+  it("answers 429 with Retry-After past 30 exchange attempts", async () => {
+    const store = new SqliteInstallationStore({ path: ":memory:", storeKey: STORE_KEY });
+    const router = createAdminRouter({
+      installations: store,
+      clientFor: () => ({ getStore: async () => FAKE_PROFILE as never }),
+      log: quietLog(),
+      dashboardOrigins: DASHBOARD_ORIGINS,
+      adminUiDir: null,
+    });
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      expect((await router.request("/admin/session", { method: "POST" })).status).toBe(401);
+    }
+    const limited = await router.request("/admin/session", { method: "POST" });
+    expect(limited.status).toBe(429);
+    expect(((await limited.json()) as { error: string }).error).toBe("too_many_requests");
+    expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/);
+  });
+});
+
 describe("admin dev preview", () => {
   it("signs in as the local install on loopback, refuses a public host", async () => {
     const store = new SqliteInstallationStore({ path: ":memory:", storeKey: STORE_KEY });
@@ -227,6 +247,11 @@ describe("admin dev preview", () => {
     const local = await router.request("http://localhost/admin/dev-session", { method: "POST" });
     expect(local.status).toBe(200);
     expect(typeof ((await local.json()) as { token: string }).token).toBe("string");
+    const forwarded = await router.request("http://localhost/admin/dev-session", {
+      method: "POST",
+      headers: { "x-forwarded-for": "203.0.113.7" },
+    });
+    expect(forwarded.status).toBe(404);
     const publicHost = await router.request("http://my-app.apps.queek.com.ng/admin/dev-session", {
       method: "POST",
     });

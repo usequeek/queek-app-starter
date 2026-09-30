@@ -10,6 +10,9 @@
     "cssVariables": true,
     "prefix": ""
   },
+  "registries": {
+    "@queek": "https://dashboard.usequeek.com/r/v1/{name}.json"
+  },
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils",

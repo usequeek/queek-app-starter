@@ -52,6 +52,9 @@ example Merchant API call. Build it with `npm run build:admin` (output:
 `POST /admin/session` and guards `GET|PUT /admin/app/api/settings` and
 `GET /admin/app/api/store` with its own short session bearer. Local preview
 (`queek app dev` + open `/admin` directly) signs in as the dev install.
+`admin-ui/src/components/**` are byte-identical copies of the registry
+items — refresh with `npx shadcn add @queek/<item> --overwrite` (never
+hand-edit; `tests/registry-parity.test.ts` enforces the bytes).
 
 ## Routes
 

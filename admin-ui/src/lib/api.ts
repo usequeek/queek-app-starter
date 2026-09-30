@@ -158,6 +158,36 @@ export function reportNavigated(path: string): void {
   post({ type: "navigated", path });
 }
 
+/**
+ * A dashboard-sent app path is safe to route when it mirrors the backend's
+ * nav rule (`AppManifestValidator::assertNavPath`): decode fully
+ * (repeatedly — the browser resolves %2e as `.`), then no controls, no
+ * scheme, no backslashes, a single leading `/`, no `..` segments. The
+ * granted-prefix half (`/admin` or under `/admin/`) is enforced by the
+ * caller when it maps the path into the router.
+ */
+function isSafeBridgePath(path: string): boolean {
+  let decoded = path;
+  for (let round = 0; round < 5; round += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      return false;
+    }
+  }
+  for (const char of decoded) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code <= 0x1f || code === 0x7f) return false;
+  }
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(decoded)) return false;
+  if (decoded.includes("\\")) return false;
+  if (!decoded.startsWith("/") || decoded.startsWith("//")) return false;
+  if (decoded.split("/").includes("..")) return false;
+  return true;
+}
+
 /** The dashboard asks the app to move (sidebar menu, back/forward): exact origin + parent only. */
 export function onDashboardNavigate(handler: (path: string) => void): () => void {
   if (!framed) return () => undefined;
@@ -166,7 +196,7 @@ export function onDashboardNavigate(handler: (path: string) => void): () => void
     const data = event.data as { source?: string; type?: string; path?: string };
     if (data?.source !== "queek-merchant" || data.type !== "navigate" || typeof data.path !== "string")
       return;
-    if (!data.path.startsWith("/") || data.path.startsWith("//")) return;
+    if (!isSafeBridgePath(data.path)) return;
     handler(data.path);
   };
   window.addEventListener("message", listener);

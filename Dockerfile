@@ -23,6 +23,7 @@ ENV NODE_ENV=production \
     NODE_OPTIONS=--max-old-space-size=96
 WORKDIR /app
 COPY --from=build /repo/dist ./dist
+COPY --from=build /repo/dist-admin ./dist-admin
 COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/package.json ./package.json
 COPY --from=build /repo/queek.app.toml ./queek.app.toml
