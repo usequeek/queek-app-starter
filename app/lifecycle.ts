@@ -5,6 +5,9 @@ import {
   type InstallationStore,
   type InstallEnvelope,
   type Logger,
+  RESYNC_EVENT,
+  type ResyncEnvelope,
+  saveResyncedInstallation,
 } from "@usequeek/app-sdk";
 
 export interface StarterLifecycleDeps {
@@ -27,13 +30,21 @@ export interface StarterLifecycleDeps {
  * never a reason to fail the install.
  */
 export function buildLifecycle(deps: StarterLifecycleDeps) {
-  async function onInstall(envelope: InstallEnvelope): Promise<void> {
+  async function onInstall(envelope: InstallEnvelope | ResyncEnvelope): Promise<void> {
     const { data } = envelope;
     // Save first, then answer 2xx: GET /store through the installation
     // client runs after the handoff, in the background. Only the store
     // p_id is logged — never a token.
     const existing = await deps.store.getInstallation(data.installation.id);
-    await deps.store.saveInstallation(buildInstallationRecord(data));
+    // A resync redelivery (settings_url falling back to install_url) merges
+    // into the stored row — refreshes secrets/settings/scopes but keeps
+    // installedAt + the cached installation token. A fresh install (or a
+    // resync for a row we never stored) writes a full new record.
+    if (envelope.type === RESYNC_EVENT && existing) {
+      await deps.store.saveInstallation(saveResyncedInstallation(existing, data));
+    } else {
+      await deps.store.saveInstallation(buildInstallationRecord(data));
+    }
     const client = createInstallationClient({
       installationId: data.installation.id,
       apiBase: data.api_base,
@@ -58,7 +69,11 @@ export function buildLifecycle(deps: StarterLifecycleDeps) {
           }),
         );
     }, 1_000);
-    if (existing) deps.log.info("reinstalled", { installation: data.installation.p_id });
+    if (existing) {
+      deps.log.info(envelope.type === RESYNC_EVENT ? "resynced" : "reinstalled", {
+        installation: data.installation.p_id,
+      });
+    }
   }
 
   async function onUninstall(envelope: {

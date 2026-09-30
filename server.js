@@ -9,13 +9,11 @@
 
 import { createRequestHandler } from "@react-router/express";
 import express from "express";
+import { LOOPBACK_IPS, PROXY_HEADERS } from "./loopback.js";
 
 const HOST = process.env.HOST;
 const PORT = Number(process.env.PORT ?? "3000");
 const MODE = process.env.NODE_ENV === "production" ? "production" : "development";
-
-const LOOPBACK_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
-const PROXY_HEADERS = ["x-forwarded-for", "cf-connecting-ip", "x-real-ip", "forwarded"];
 
 function getLoadContext(req) {
   const raw = req.socket?.remoteAddress;

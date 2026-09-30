@@ -161,6 +161,8 @@ export function webhookAction(request: Request, runtime: Runtime = getRuntime())
 /** Session-exchange throttle: attempts kept per client inside the window. */
 const SESSION_WINDOW_MS = 60_000;
 const SESSION_MAX_ATTEMPTS = 30;
+/** Past this many tracked clients, stale buckets are swept on the next check. */
+const SESSION_THROTTLE_MAX_KEYS = 1000;
 const sessionAttempts = new Map<string, number[]>();
 
 /** Tests only: clear the throttle buckets. */
@@ -168,8 +170,23 @@ export function resetSessionThrottle(): void {
   sessionAttempts.clear();
 }
 
+/** Tests only: number of tracked throttle clients. */
+export function sessionThrottleSize(): number {
+  return sessionAttempts.size;
+}
+
+function evictStaleSessionBuckets(at: number): void {
+  if (sessionAttempts.size <= SESSION_THROTTLE_MAX_KEYS) return;
+  for (const [key, marks] of sessionAttempts) {
+    const fresh = marks.filter((mark) => mark > at - SESSION_WINDOW_MS);
+    if (fresh.length === 0) sessionAttempts.delete(key);
+    else if (fresh.length !== marks.length) sessionAttempts.set(key, fresh);
+  }
+}
+
 export function checkSessionThrottle(clientKey: string): { retryAfter: number } | null {
   const at = Date.now();
+  evictStaleSessionBuckets(at);
   const seen = (sessionAttempts.get(clientKey) ?? []).filter((mark) => mark > at - SESSION_WINDOW_MS);
   if (seen.length >= SESSION_MAX_ATTEMPTS) {
     const retryAfter = Math.max(1, Math.ceil(((seen[0] as number) + SESSION_WINDOW_MS - at) / 1000));

@@ -23,6 +23,18 @@ npm run typecheck && npm run lint && npm test && npm run build
 
 ## Develop
 
+Prerequisite: the Queek CLI (`@usequeek/cli` — the same CLI CI deploys
+with: `npx -y @usequeek/cli app deploy`). `npm run dev` is `queek app dev`,
+so without the CLI on PATH it fails with `queek: command not found`.
+Install it once:
+
+```bash
+npm install -g @usequeek/cli
+```
+
+(or prefix every `queek …` command below with `npx -y @usequeek/cli` —
+no install needed). Then:
+
 ```bash
 npm install
 npm run dev   # the whole loop: tunnel + test-store install + your app, started with the dev env

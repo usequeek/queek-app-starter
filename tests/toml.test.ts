@@ -14,7 +14,7 @@ import { APP_SLUG, DEFAULT_BASE_URL } from "../app/config.js";
  * What this mirror deliberately does NOT cover: the full Laratrust scope
  * catalogue (KNOWN_SCOPES below is 5 entries; the backend checks
  * `PermissionConstants::ALL_PERMISSIONS`), the URL guard's DNS/SSRF rules
- * (`WebhookUrlGuard::reject`), extensions/dashboard rules, and any future
+ * (`WebhookUrlGuard::reject`), the dashboard rules, and any future
  * validator rule. Mirror-green NEVER means backend-validator-green.
  *
  * SOURCE OF TRUTH IS THE BACKEND: `queek app deploy` runs the real
@@ -27,10 +27,13 @@ import { APP_SLUG, DEFAULT_BASE_URL } from "../app/config.js";
  *   pricing, developer_url, privacy_url, support_url, scopes, webhook_topics,
  *   settings, install_url, uninstall_url, settings_url, webhook_url
  *   (unknown rejected)
- * - extensions: ONLY proxy/blocks/merchant_page_url (the live
- *   `AppManifestValidator::validateExtensions` rejectUnknown list) — nav is
- *   refused until backend item 1 (extensions.nav) lands; merchant_page_url
- *   and proxy.url must be https
+ * - extensions: ONLY proxy/blocks/merchant_page_url/nav (the live
+ *   `AppManifestValidator::validateExtensions` rejectUnknown list) —
+ *   merchant_page_url and proxy.url must be https; nav mirrors
+ *   `validateNav`/`assertNavPath` (≤10 entries of {label, path}, label ≤40
+ *   chars without control characters, path ≤2048 chars, 5-round decoded,
+ *   no `..`/scheme/backslash, single leading `/`, under the merchant page
+ *   path prefix, and refused without a merchant_page_url)
  * - slug `^[a-z0-9][a-z0-9-]{1,63}$`, name ≤120, icon `^[a-z0-9_-]+$` ≤64
  * - scopes non-empty; each a known merchant permission and NOT under a
  *   non-delegable prefix (merchant-api_keys/roles/users/employees/pos/apps-)
@@ -141,6 +144,49 @@ function toManifest(doc: TomlDoc): Record<string, unknown> {
   return manifest;
 }
 
+const NAV_MAX_ITEMS = 10;
+const NAV_LABEL_MAX = 40;
+const NAV_PATH_MAX = 2048;
+
+/**
+ * Mirrors `AppManifestValidator::assertNavPath`: decode fully (repeatedly —
+ * the browser resolves %2e as `.`, so one pass would let %252e%252e walk
+ * out), then the shape rules, then the merchant-page prefix bound.
+ */
+const hasControlChars = (value: string): boolean =>
+  [...value].some((ch) => {
+    const code = ch.codePointAt(0) as number;
+    return (code >= 0x00 && code <= 0x1f) || code === 0x7f;
+  });
+
+function navPathError(path: string, prefix: string, index: number): string | null {
+  const where = `extensions.nav[${index}].path`;
+  let decoded = path;
+  for (let round = 0; round < 5; round += 1) {
+    let next: string;
+    try {
+      next = decodeURIComponent(decoded);
+    } catch {
+      break; // rawurldecode leaves malformed sequences literal
+    }
+    if (next === decoded) break;
+    decoded = next;
+  }
+  if (hasControlChars(decoded)) return `The ${where} must not contain control characters.`;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(decoded)) {
+    return `The ${where} must be a relative path, never a URL with a scheme.`;
+  }
+  if (decoded.includes("\\")) return `The ${where} must not contain backslashes.`;
+  if (!decoded.startsWith("/") || decoded.startsWith("//")) {
+    return `The ${where} must be a relative path starting with a single '/'.`;
+  }
+  if (decoded.split("/").includes("..")) return `The ${where} must not contain '..' segments.`;
+  if (prefix !== "" && decoded !== prefix && !decoded.startsWith(`${prefix}/`)) {
+    return `The ${where} must stay under the app page path '${prefix}'.`;
+  }
+  return null;
+}
+
 function validateManifest(manifest: Record<string, unknown>): string[] {
   const errors: string[] = [];
   for (const key of Object.keys(manifest)) {
@@ -222,15 +268,65 @@ function validateManifest(manifest: Record<string, unknown>): string[] {
       errors.push("extensions must be a table.");
     } else {
       for (const key of Object.keys(extensions)) {
-        if (!["proxy", "blocks", "merchant_page_url"].includes(key)) {
+        if (!["proxy", "blocks", "merchant_page_url", "nav"].includes(key)) {
           errors.push(
-            `Unknown extensions key '${key}': the backend allows only proxy/blocks/merchant_page_url (nav lands with backend item 1).`,
+            `Unknown extensions key '${key}': the backend allows only proxy/blocks/merchant_page_url/nav.`,
           );
         }
       }
       const record = extensions as Record<string, unknown>;
       if (record.merchant_page_url !== undefined && typeof record.merchant_page_url !== "string") {
         errors.push("extensions.merchant_page_url must be a string.");
+      }
+      const nav = record.nav;
+      if (nav !== undefined) {
+        if (!Array.isArray(nav)) {
+          errors.push("extensions.nav must be an array.");
+        } else {
+          if (nav.length > NAV_MAX_ITEMS)
+            errors.push(`extensions.nav must have at most ${NAV_MAX_ITEMS} entries.`);
+          const pageUrl = record.merchant_page_url;
+          if (typeof pageUrl !== "string" || pageUrl === "") {
+            errors.push(
+              "extensions.nav needs extensions.merchant_page_url: sidebar entries have no page to live under.",
+            );
+          }
+          let prefix = "";
+          if (typeof pageUrl === "string" && pageUrl !== "") {
+            try {
+              prefix = new URL(pageUrl).pathname.replace(/\/+$/, "");
+            } catch {
+              prefix = "";
+            }
+          }
+          nav.forEach((item: unknown, index: number) => {
+            const where = `extensions.nav[${index}]`;
+            if (typeof item !== "object" || item === null || Array.isArray(item)) {
+              errors.push(`${where} must be a table with label and path.`);
+              return;
+            }
+            const entry = item as Record<string, unknown>;
+            for (const key of Object.keys(entry)) {
+              if (!["label", "path"].includes(key)) errors.push(`Unknown field '${key}' in ${where}.`);
+            }
+            const label = entry.label;
+            if (
+              typeof label !== "string" ||
+              label.length === 0 ||
+              label.length > NAV_LABEL_MAX ||
+              hasControlChars(label)
+            ) {
+              errors.push(`${where}.label must be a string up to 40 chars without control characters.`);
+            }
+            const navPath = entry.path;
+            if (typeof navPath !== "string" || navPath.length > NAV_PATH_MAX) {
+              errors.push(`${where}.path must be a string up to 2048 chars.`);
+            } else {
+              const pathError = navPathError(navPath, prefix, index);
+              if (pathError) errors.push(pathError);
+            }
+          });
+        }
       }
       const proxy = record.proxy;
       if (proxy !== undefined) {
@@ -277,20 +373,56 @@ describe("queek.app.toml mirror", () => {
     expect(doc.version).toBeUndefined();
   });
 
-  it("keeps extensions deployable: merchant page only, no nav yet", () => {
+  it("keeps extensions deployable: merchant page ships, nav entries allowed", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     const manifest = toManifest(doc);
     const extensions = manifest.extensions as Record<string, unknown>;
     expect(extensions.merchant_page_url).toBe(`${DEFAULT_BASE_URL}/admin`);
-    expect(extensions.nav).toBeUndefined();
+    // Nothing shipped under nav yet — but a live-style entry under the
+    // merchant page prefix passes the mirror (sidebar entries are shippable).
+    const withNav = {
+      ...manifest,
+      extensions: { ...extensions, nav: [{ label: "Settings", path: "/admin/settings" }] },
+    };
+    expect(validateManifest(withNav)).toEqual([]);
   });
 
-  it("refuses extensions.nav locally — the live validator would refuse the deploy", () => {
+  it("mirrors validateNav: nav needs the merchant page and prefix-bound safe paths", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     const manifest = toManifest(doc);
     const extensions = manifest.extensions as Record<string, unknown>;
-    const withNav = { ...manifest, extensions: { ...extensions, nav: [{ label: "Home", path: "/admin" }] } };
-    expect(validateManifest(withNav).some((error) => error.includes("nav"))).toBe(true);
+    const check = (nav: unknown, pageUrl: unknown = `${DEFAULT_BASE_URL}/admin`): string[] =>
+      validateManifest({
+        ...manifest,
+        extensions: { ...extensions, merchant_page_url: pageUrl, nav },
+      });
+    // The page itself and anything under its prefix pass.
+    expect(check([{ label: "Home", path: "/admin" }])).toEqual([]);
+    expect(check([{ label: "Settings", path: "/admin/settings" }])).toEqual([]);
+    // Sidebar entries with no page to live under are refused.
+    expect(check([{ label: "Home", path: "/admin" }], null).join(" ")).toContain("merchant_page_url");
+    // Unknown nav keys are refused.
+    expect(
+      check([{ label: "Home", path: "/admin", icon: "wave" }]).some((error) => error.includes("icon")),
+    ).toBe(true);
+    // Paths must stay under the page prefix: shape violations are refused.
+    for (const path of [
+      "/other",
+      "/admin/../other",
+      "/admin/%252e%252e/other",
+      "https://evil.test/admin",
+      "//admin",
+      "admin/settings",
+      "/admin\\settings",
+    ]) {
+      expect(check([{ label: "Home", path }])).not.toEqual([]);
+    }
+    // Labels are short strings without control characters; at most 10 entries.
+    expect(check([{ label: "x".repeat(41), path: "/admin" }])).not.toEqual([]);
+    expect(check([{ label: "", path: "/admin" }])).not.toEqual([]);
+    expect(
+      check(Array.from({ length: 11 }, (_, index) => ({ label: `Item ${index}`, path: "/admin" }))),
+    ).not.toEqual([]);
   });
 
   it("maps the groups onto flat manifest names", () => {

@@ -1,3 +1,5 @@
+import { LOOPBACK_IPS, PROXY_HEADERS } from "../loopback.js";
+
 /** Per-request load context from the app server (server.js). */
 export interface AppLoadContext {
   /** Direct socket peer (`req.socket.remoteAddress`), unspoofable. */
@@ -7,8 +9,6 @@ export interface AppLoadContext {
 }
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
-const LOOPBACK_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
-const PROXY_HEADERS = ["x-forwarded-for", "cf-connecting-ip", "x-real-ip", "forwarded"];
 
 function hasProxyHeaders(headers: Headers): boolean {
   return PROXY_HEADERS.some((name) => (headers.get(name) ?? "") !== "");

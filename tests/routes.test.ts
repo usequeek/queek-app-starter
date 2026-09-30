@@ -1,8 +1,14 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { signQueekPayload } from "@usequeek/app-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isSafeBridgePath } from "../app/bridge.client.js";
 import { isLoopbackRequest } from "../app/load-context.js";
-import { getRuntime } from "../app/queek.server.js";
+import {
+  checkSessionThrottle,
+  getAdminSession,
+  getRuntime,
+  sessionThrottleSize,
+} from "../app/queek.server.js";
 import { action as settingsAction, loader as settingsLoader } from "../app/routes/admin.api.settings.js";
 import { loader as storeLoader } from "../app/routes/admin.api.store.js";
 import { action as devSessionAction } from "../app/routes/admin.dev-session.js";
@@ -187,6 +193,56 @@ describe("machine routes", () => {
     expect(logs.some((line) => line.includes("order updated") && line.includes("order-1"))).toBe(true);
   });
 
+  it("webhooks: a forged signature answers 401", async () => {
+    await install();
+    const body = JSON.stringify({
+      id: `evt-${randomUUID()}`,
+      topic: "orders/updated",
+      api_version: "v1",
+      created_at: new Date().toISOString(),
+      data: { installation: { id: INSTALLATION_ID }, order: { id: "order-forged" } },
+    });
+    const response = await webhookAction({
+      request: new Request("https://my-app.apps.queek.com.ng/webhooks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Queek-Topic": "orders/updated",
+          ...signedDelivery(body, "wrong-secret"),
+        },
+        body,
+      }),
+    } as never);
+    expect(response.status).toBe(401);
+  });
+
+  it("webhooks: a stale timestamp answers 401 even with a valid signature", async () => {
+    await install();
+    const id = `evt-${randomUUID()}`;
+    const timestamp = (Math.floor(Date.now() / 1000) - 3600).toString();
+    const body = JSON.stringify({
+      id,
+      topic: "orders/updated",
+      api_version: "v1",
+      created_at: new Date().toISOString(),
+      data: { installation: { id: INSTALLATION_ID }, order: { id: "order-stale" } },
+    });
+    const response = await webhookAction({
+      request: new Request("https://my-app.apps.queek.com.ng/webhooks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Queek-Topic": "orders/updated",
+          "webhook-id": id,
+          "webhook-timestamp": timestamp,
+          "webhook-signature": signQueekPayload(id, timestamp, body, WEBHOOK_SECRET),
+        },
+        body,
+      }),
+    } as never);
+    expect(response.status).toBe(401);
+  });
+
   it("webhooks: GET answers 405", async () => {
     const response = await webhookAction({
       request: new Request("https://my-app.apps.queek.com.ng/webhooks", { method: "GET" }),
@@ -230,6 +286,19 @@ describe("admin session", () => {
     expect(((await limited.json()) as { error: string }).error).toBe("too_many_requests");
   });
 
+  it("evicts stale throttle buckets once past the client cap", () => {
+    vi.useFakeTimers();
+    try {
+      for (let i = 0; i < 1005; i += 1) checkSessionThrottle(`evict-client-${i}`);
+      expect(sessionThrottleSize()).toBeGreaterThan(1000);
+      vi.setSystemTime(Date.now() + 61_000);
+      expect(checkSessionThrottle("evict-client-fresh")).toBeNull();
+      expect(sessionThrottleSize()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("dev-session: 404 outside development, loopback-only inside it", async () => {
     await install();
     const direct = (host: string, headers: Record<string, string> = {}, clientIp?: string) =>
@@ -264,6 +333,46 @@ describe("admin session", () => {
         clientIp: "203.0.113.7",
       }),
     ).toBe(false);
+  });
+
+  it("dev-session: with several installs, previews the most recently updated one", async () => {
+    const secondId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+    await installAction({
+      request: handoffRequest("/install", "app/installed", installData()),
+    } as never);
+    await installAction({
+      request: handoffRequest("/install", "app/installed", {
+        ...installData(),
+        installation: { id: secondId, p_id: "inst_two" },
+        embed_secret: `embsec_${randomBytes(32).toString("base64")}`,
+      }),
+    } as never);
+    // Touch the second row last: the store stamps updated_at on every save,
+    // so this makes "most recent" unambiguous (the old first-match code
+    // would still return the first install here).
+    const runtime = getRuntime();
+    const second = await runtime.store.getInstallation(secondId);
+    if (!second) throw new Error("second install did not store a row");
+    await runtime.store.saveInstallation({ ...second });
+
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    try {
+      const response = await devSessionAction({
+        request: new Request("http://127.0.0.1:3000/admin/dev-session", { method: "POST" }),
+        context: { clientIp: "127.0.0.1" },
+      } as never);
+      expect(response.status).toBe(200);
+      const { token } = (await response.json()) as { token: string };
+      const session = await getAdminSession(
+        new Request("https://my-app.apps.queek.com.ng/admin/api/store", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      );
+      expect(session?.installation.installationId).toBe(secondId);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
   });
 });
 

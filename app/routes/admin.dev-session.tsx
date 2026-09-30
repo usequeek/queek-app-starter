@@ -16,7 +16,14 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
   const runtime = getRuntime();
   const installs = await runtime.store.listInstallations();
-  const target = installs.find((row) => row.embedSecret);
+  // Several dev installs can each hold an embed secret — preview the most
+  // recently updated one (the store just installed), deterministically.
+  const candidates = installs.filter((row) => row.embedSecret);
+  candidates.sort((a, b) => {
+    if (a.updatedAt === b.updatedAt) return a.installationId < b.installationId ? -1 : 1;
+    return a.updatedAt < b.updatedAt ? 1 : -1;
+  });
+  const target = candidates[0];
   const issued = target ? issueAdminSession(target, "dev-preview") : null;
   if (!issued) {
     return adminJson(
