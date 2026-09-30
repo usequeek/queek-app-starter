@@ -7,11 +7,11 @@ A [Queek](https://usequeek.com) installable app, from
 
 ```bash
 npm install
-npm run dev   # the whole loop: tunnel + test-store install + your app, started with the dev env
+npm run dev   # the whole loop: tunnel + dev-store install + your app, started with the dev env
 ```
 
 `queek app dev` registers `queek.app.toml` as a `development` build, installs
-it on an owned test store, then starts the app from the toml's `[dev]` table
+it on an owned dev store, then starts the app from the toml's `[dev]` table
 (`tsx watch src/index.ts`) with the dev env injected: `APP_BASE_URL` (the
 tunnel origin), `PORT`, `NODE_ENV=development`, plus the signing secret,
 keypair and encryption key from `.queek/.env.local` (minted on first run,
