@@ -2,6 +2,24 @@
 
 A [Queek](https://usequeek.com) installable app, from
 [`usequeek/queek-app-starter`](https://github.com/usequeek/queek-app-starter).
+Shaped like Shopify's React Router template (`shopify app init`): a
+full-stack React Router app — server loaders and actions over
+[`@usequeek/app-sdk`](https://www.npmjs.com/package/@usequeek/app-sdk) —
+plus shadcn with the Queek registry preinstalled.
+
+Shape (Shopify's template → ours): `app/routes.ts` (`flatRoutes`) →
+`app/routes.ts`; `app/shopify.server.ts` → `app/queek.server.ts` (config,
+store, token minting, install/webhook/session helpers over
+`@usequeek/app-sdk@0.5.1` — newer bridge exports from the SDK worktree are
+named in `TODO(SDK …)` comments, not used); `app/routes/app.*` (Polaris) →
+`app/routes/admin*` (shadcn + Queek registry); `app/entry.server.tsx` adds
+the dashboard-only `frame-ancestors` CSP; `shopify.app.toml` →
+`queek.app.toml`. No `.graphqlrc.ts`: the one Merchant API call
+(`GET /admin/api/store`) goes through the SDK installation client.
+
+```bash
+npm run typecheck && npm run lint && npm test && npm run build
+```
 
 ## Develop
 
@@ -12,14 +30,17 @@ npm run dev   # the whole loop: tunnel + test-store install + your app, started 
 
 `queek app dev` registers `queek.app.toml` as a `development` build, installs
 it on an owned test store, then starts the app from the toml's `[dev]` table
-(`tsx watch src/index.ts`) with the dev env injected: `APP_BASE_URL` (the
+(`node ./server.js`) with the dev env injected: `APP_BASE_URL` (the
 tunnel origin), `PORT`, `NODE_ENV=development`, plus the signing secret,
 keypair and encryption key from `.queek/.env.local` (minted on first run,
-never printed). Your project's own `.env` fills the rest. Output streams
-prefixed with `[app]`; a crash restarts with backoff. Save `queek.app.toml`
-to re-register; `Ctrl+C` stops the app and the tunnel. When the app answers
-`/health`, the command prints the store-admin and storefront links — open
-them.
+never printed). Your project's own `.env` fills the rest. In development the
+server runs Vite in middleware mode (HMR); in production it serves the
+React Router build. Save `queek.app.toml` to re-register; `Ctrl+C` stops the
+app and the tunnel. When the app answers `/health`, the command prints the
+store-admin and storefront links — open them.
+
+Without the CLI: `npm run dev:server` runs the same server (needs the env
+from `.env.example` yourself).
 
 ## Deploy & submit
 
@@ -45,24 +66,26 @@ manifest, grouped (`[listing]`, `[access]`, `[webhooks]`, `[app]`,
 
 ## Admin UI
 
-The embedded merchant page is a React + shadcn SPA (`admin-ui/`, Queek
-registry theme) served by Hono at `GET /admin` — one settings form plus an
-example Merchant API call. Build it with `npm run build:admin` (output:
-`dist-admin/`, gitignored); the server exchanges the dashboard token at
-`POST /admin/session` and guards `GET|PUT /admin/app/api/settings` and
-`GET /admin/app/api/store` with its own short session bearer. Local preview
-(`queek app dev` + open `/admin` directly) signs in as the dev install.
-`admin-ui/src/components/**` are byte-identical copies of the registry
-items — refresh with `npx shadcn add @queek/<item> --overwrite` (never
-hand-edit; `tests/registry-parity.test.ts` enforces the bytes).
+The embedded merchant page is React Router + shadcn (`app/routes/admin*`,
+Queek registry theme): home (the store profile, the example Merchant API
+call) plus one settings form. Server loaders render the shell; the page
+trades the dashboard token at `POST /admin/session` for its own short
+session bearer and calls `GET /admin/api/store` and `GET|PUT
+/admin/api/settings` with it (`Authorization` header — never cookies, never
+URLs). Local preview (`queek app dev` + open `/admin` directly on this
+machine) signs in as the dev install via `POST /admin/dev-session`
+(loopback without forwarding headers only — a public tunnel URL answers
+404). `app/components/**` are copies of the registry items — refresh with
+`npx shadcn add @queek/<item> --overwrite` (never hand-edit;
+`tests/registry.test.ts` pins the provenance).
 
 ## Routes
 
 `GET /health` (Dokploy check) · `/install` · `/uninstall` · `/settings`
 (handoff, signature-verified) · `POST /webhooks` (`orders/updated`) ·
 `GET /manifest.json` (the toml rendered with `APP_BASE_URL`) ·
-`GET /admin` (embedded React page) · `POST /admin/session` ·
-`/admin/app/api/*` (session-guarded JSON).
+`/admin` (embedded home + settings, session-guarded JSON under
+`/admin/api/*`, exchange at `POST /admin/session`).
 
 Installations live in SQLite (`QUEEK_DB_PATH`, `./data/my-app.db` locally —
 development only). Production takes `DATABASE_URL` (Postgres, own database)

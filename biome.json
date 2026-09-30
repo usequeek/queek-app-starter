@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/dist-admin", "!**/node_modules", "!**/data"]
+    "includes": ["**", "!**/dist", "!**/build", "!**/node_modules", "!**/data", "!**/.react-router"]
   },
   "formatter": {
     "enabled": true,
@@ -38,7 +38,7 @@
   },
   "overrides": [
     {
-      "includes": ["admin-ui/src/components/**"],
+      "includes": ["app/components/**", "app/app.css"],
       "formatter": { "enabled": false },
       "linter": { "enabled": false },
       "assist": { "enabled": false }

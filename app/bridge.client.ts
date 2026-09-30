@@ -1,39 +1,53 @@
 /**
- * Session + dashboard bridge for the React admin.
+ * Session + dashboard bridge for the embedded admin (client-only).
  *
  * Framed by the Queek dashboard: say `ready` to the parent (exact origins
  * only), take its short-lived session token, trade it ONCE at
  * `POST /admin/session` for the app's own session bearer. Opened directly
  * on this machine in development: `POST /admin/dev-session` instead.
- * The session bearer lives in memory only (cross-site iframe: no cookies).
- * Moves to @usequeek/app-sdk's installAuthFetch once it ships.
+ * The session Bearer [REDACTED] in memory only (cross-site iframe: no cookies).
+ *
+ * Only SDK 0.5.1 APIs are used (none — this file is hand-rolled
+ * postMessage). TODO(SDK bridge v1): replace with `installAuthFetch()`
+ * (reads the launch token, exchanges once, attaches the Bearer [REDACTED] refreshes
+ * via `ready→token`) and the `./react` `useQueek()` provider (`toast`,
+ * `saveBar`, `title`, `navigate`, `pickResource`, live `theme`).
  */
 
-interface AdminConfig {
+export interface BridgeConfig {
   origins: string[];
   devPreview: boolean;
 }
 
-function readConfig(): AdminConfig {
-  try {
-    const raw = document.getElementById("queek-admin-config")?.textContent ?? "";
-    const parsed = JSON.parse(raw) as Partial<AdminConfig>;
-    return {
-      origins: Array.isArray(parsed.origins) ? parsed.origins.filter((o) => typeof o === "string") : [],
-      devPreview: parsed.devPreview === true,
-    };
-  } catch {
-    return { origins: [], devPreview: false };
-  }
+let config: BridgeConfig = { origins: [], devPreview: false };
+
+export function configureBridge(next: BridgeConfig): void {
+  config = next;
 }
 
-const config = readConfig();
-const framed = window.parent !== window;
+function isBrowser(): boolean {
+  return typeof window !== "undefined";
+}
+
+function isFramed(): boolean {
+  return isBrowser() && window.parent !== window;
+}
+
+/** Inside the Queek dashboard: the dashboard's sidebar carries the app menu. */
+export function getIsFramed(): boolean {
+  return isFramed();
+}
+
+/** Direct local open of the dev server with preview enabled. */
+export function getIsLocalPreview(): boolean {
+  return isBrowser() && !isFramed() && config.devPreview;
+}
+
 let session: string | null = null;
 let pending: Promise<string> | null = null;
 
 function post(message: Record<string, unknown>): void {
-  if (!framed) return;
+  if (!isFramed()) return;
   for (const origin of config.origins) {
     try {
       window.parent.postMessage({ source: "queek-app", ...message }, origin);
@@ -64,12 +78,14 @@ function dashboardToken(): Promise<string> {
       resolve(data.token);
     }
     window.addEventListener("message", onMessage);
+    // TODO(SDK bridge v1): announce `capabilities` + `kit` version in `ready`
+    // (old apps degrade to today's chrome) via the SDK sender.
     post({ type: "ready" });
   });
 }
 
 async function establish(): Promise<string> {
-  if (!framed && config.devPreview) {
+  if (!isFramed() && config.devPreview) {
     const response = await fetch("/admin/dev-session", {
       method: "POST",
       credentials: "omit",
@@ -78,7 +94,7 @@ async function establish(): Promise<string> {
     if (!response.ok) throw new Error("Local preview needs `queek app dev` to have installed the app once.");
     return ((await response.json()) as { token: string }).token;
   }
-  if (!framed) throw new Error("Open My App from your Queek dashboard.");
+  if (!isFramed()) throw new Error("Open My App from your Queek dashboard.");
   const token = await dashboardToken();
   const response = await fetch("/admin/session", {
     method: "POST",
@@ -99,6 +115,11 @@ async function ensureSession(): Promise<string> {
   return session;
 }
 
+/** Forget the session (after a 401 the next call re-establishes). */
+export function dropSession(): void {
+  session = null;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -111,7 +132,7 @@ export class ApiError extends Error {
 export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const sessionBearer = await ensureSession();
-    const response = await fetch(`/admin/app/api${path}`, {
+    const response = await fetch(`/admin/api${path}`, {
       method,
       headers: {
         Authorization: `Bearer ${sessionBearer}`,
@@ -122,7 +143,7 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
       cache: "no-store",
     });
     if (response.status === 401 && attempt === 0) {
-      session = null;
+      dropSession();
       continue;
     }
     const data = (await response.json().catch(() => ({}))) as T & { message?: string };
@@ -132,8 +153,11 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
   throw new ApiError("Your session ended. Close the app and open it again.", 401);
 }
 
+/** Dashboard-following theme (U7): toggle shadcn's own `dark` class, live. */
 export function applyTheme(mode: "dark" | "light"): void {
+  if (!isBrowser()) return;
   document.documentElement.classList.toggle("dark", mode === "dark");
+  document.documentElement.style.colorScheme = mode;
   try {
     sessionStorage.setItem("queek-theme", mode);
   } catch {
@@ -143,15 +167,11 @@ export function applyTheme(mode: "dark" | "light"): void {
 
 /** Keep the dashboard frame as tall as the page. */
 export function startAutoHeight(): void {
-  if (!framed || !("ResizeObserver" in window)) return;
+  if (!isFramed() || !("ResizeObserver" in window)) return;
   const report = () => post({ type: "resize", height: Math.ceil(document.documentElement.scrollHeight) });
   new ResizeObserver(report).observe(document.body);
   report();
 }
-
-export const isLocalPreview = !framed && config.devPreview;
-/** Inside the Queek dashboard: the dashboard's sidebar carries the app menu. */
-export const isFramed = framed;
 
 /** Tell the dashboard which app page is showing, so its address and sidebar follow. */
 export function reportNavigated(path: string): void {
@@ -160,13 +180,12 @@ export function reportNavigated(path: string): void {
 
 /**
  * A dashboard-sent app path is safe to route when it mirrors the backend's
- * nav rule (`AppManifestValidator::assertNavPath`): decode fully
- * (repeatedly — the browser resolves %2e as `.`), then no controls, no
- * scheme, no backslashes, a single leading `/`, no `..` segments. The
- * granted-prefix half (`/admin` or under `/admin/`) is enforced by the
- * caller when it maps the path into the router.
+ * nav rule: decode fully (repeatedly — the browser resolves %2e as `.`),
+ * then no controls, no scheme, no backslashes, a single leading `/`, no
+ * `..` segments. The granted-prefix half (`/admin` or under `/admin/`) is
+ * enforced by the caller when it maps the path into the router.
  */
-function isSafeBridgePath(path: string): boolean {
+export function isSafeBridgePath(path: string): boolean {
   let decoded = path;
   for (let round = 0; round < 5; round += 1) {
     try {
@@ -190,7 +209,7 @@ function isSafeBridgePath(path: string): boolean {
 
 /** The dashboard asks the app to move (sidebar menu, back/forward): exact origin + parent only. */
 export function onDashboardNavigate(handler: (path: string) => void): () => void {
-  if (!framed) return () => undefined;
+  if (!isFramed()) return () => undefined;
   const listener = (event: MessageEvent) => {
     if (event.source !== window.parent || !config.origins.includes(event.origin)) return;
     const data = event.data as { source?: string; type?: string; path?: string };

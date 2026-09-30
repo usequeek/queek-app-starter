@@ -6,7 +6,7 @@ import {
   loadConfig,
   renderManifest,
   staticManifestFromToml,
-} from "../src/config.js";
+} from "../app/config.js";
 
 const VALID_KEY = Buffer.alloc(32, 5).toString("base64");
 // Ephemeral test-only RSA key (generated per run, never committed, never real).
@@ -16,7 +16,7 @@ const { privateKey: TEST_PRIVATE_KEY } = generateKeyPairSync("rsa", {
   privateKeyEncoding: { type: "pkcs8", format: "pem" },
 });
 
-// Expectations derive from src/config.ts (APP_SLUG/DEFAULT_BASE_URL), never a
+// Expectations derive from app/config.ts (APP_SLUG/DEFAULT_BASE_URL), never a
 // hardcoded slug — `npm create` renames both, and the scaffold must stay green.
 function env(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   return {

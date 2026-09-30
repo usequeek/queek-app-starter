@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
 import { describe, expect, it } from "vitest";
-import { APP_SLUG, DEFAULT_BASE_URL } from "../src/config.js";
+import { APP_SLUG, DEFAULT_BASE_URL } from "../app/config.js";
 
 /**
  * PARTIAL MIRROR — NOT the backend validator. This starter's queek.app.toml,

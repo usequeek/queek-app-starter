@@ -37,5 +37,5 @@ merchant_page_url = "https://my-app.apps.queek.com.ng/admin"
 # update tests/toml.test.ts with it (it mirrors that validator subset).
 
 [dev]
-command = "tsx watch src/index.ts"
+command = "node ./server.js"
 port = 3000

@@ -1,6 +1,6 @@
 import { type AppTokens, createLogger, SqliteInstallationStore } from "@usequeek/app-sdk";
 import { describe, expect, it, vi } from "vitest";
-import { buildLifecycle } from "../src/lifecycle.js";
+import { buildLifecycle } from "../app/lifecycle.js";
 
 const STORE_KEY = Buffer.alloc(32, 9).toString("base64");
 const INSTALLATION_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";

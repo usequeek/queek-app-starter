@@ -22,8 +22,8 @@ ENV NODE_ENV=production \
     QUEEK_DB_PATH=/app/data/my-app.db \
     NODE_OPTIONS=--max-old-space-size=96
 WORKDIR /app
-COPY --from=build /repo/dist ./dist
-COPY --from=build /repo/dist-admin ./dist-admin
+COPY --from=build /repo/build ./build
+COPY --from=build /repo/server.js ./server.js
 COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/package.json ./package.json
 COPY --from=build /repo/queek.app.toml ./queek.app.toml
@@ -32,4 +32,4 @@ USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD wget -qO- http://127.0.0.1:3000/health || exit 1
-CMD ["node", "dist/index.js"]
+CMD ["node", "server.js"]
