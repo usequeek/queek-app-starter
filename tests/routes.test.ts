@@ -353,6 +353,9 @@ describe("admin session", () => {
     const runtime = getRuntime();
     const second = await runtime.store.getInstallation(secondId);
     if (!second) throw new Error("second install did not store a row");
+    // updated_at has millisecond resolution: leave a gap so the touch can
+    // never land in the same millisecond as the second install's own save.
+    await new Promise((resolve) => setTimeout(resolve, 5));
     await runtime.store.saveInstallation({ ...second });
 
     const prevNodeEnv = process.env.NODE_ENV;
