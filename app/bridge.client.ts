@@ -1,17 +1,28 @@
 /**
  * Session + dashboard bridge for the embedded admin (client-only).
  *
- * Framed by the Queek dashboard: say `ready` to the parent (exact origins
- * only), take its short-lived session token, trade it ONCE at
- * `POST /admin/session` for the app's own session bearer. Opened directly
- * on this machine in development: `POST /admin/dev-session` instead.
- * The session Bearer [REDACTED] in memory only (cross-site iframe: no cookies).
+ * Framed by the Queek dashboard: on the signed first load the launch token
+ * rides `?queek_token=` (read + stripped from the URL at once, exchanged
+ * directly — no bridge round-trip for first paint); otherwise say `ready`
+ * to the parent (exact origins only), take its short-lived bridge token
+ * and trade it ONCE at `POST /admin/session` for the app's own session
+ * bearer. Opened directly on this machine in development:
+ * `POST /admin/dev-session` instead. The session Bearer [REDACTED] in memory only
+ * (cross-site iframe: no cookies).
  *
- * Only SDK 0.5.1 APIs are used (none — this file is hand-rolled
- * postMessage). TODO(SDK bridge v1): replace with `installAuthFetch()`
- * (reads the launch token, exchanges once, attaches the Bearer [REDACTED] refreshes
- * via `ready→token`) and the `./react` `useQueek()` provider (`toast`,
- * `saveBar`, `title`, `navigate`, `pickResource`, live `theme`).
+ * Server side already runs SDK 0.6.0's two-purpose exchange (launch first,
+ * bridge fallback — see admin-session.ts). Client side stays hand-rolled
+ * postMessage for now: SDK 0.6.0's browser modules (`installAuthFetch`,
+ * frame/theme) ship only behind the package's main entry, whose barrel
+ * also re-exports node-only modules — ANY main-entry import breaks the
+ * Vite browser build (verified with a bare `sendResize` probe and a 3-file
+ * control barrel: Rollup binds the node-only modules' `node:crypto`
+ * imports before tree-shaking can drop them; only `./react` bundles, and
+ * it does not export these helpers). TODO(SDK browser subpaths): replace
+ * `takeLaunchToken` + the ready/token/resize/navigated plumbing below with
+ * `installAuthFetch()` + `listenToDashboard`/`sendResize`/`sendNavigated`/
+ * `installThemeListener` once the SDK exports its browser-safe modules
+ * (frame/auth-fetch/theme) under their own subpaths.
  */
 
 export interface BridgeConfig {
@@ -46,6 +57,31 @@ export function getIsLocalPreview(): boolean {
 let session: string | null = null;
 let pending: Promise<string> | null = null;
 
+/** Launch-token query param on the signed first load (mirrors the SDK's `LAUNCH_TOKEN_PARAM`). */
+const LAUNCH_TOKEN_PARAM = "queek_token";
+
+let launchConsumed = false;
+
+/**
+ * Take the launch token off the signed first load, stripping it from the
+ * URL at once so it never lingers in history. Single-use per page load:
+ * later calls (every 401 refresh) return null and use the bridge flow.
+ */
+function takeLaunchToken(): string | null {
+  if (launchConsumed || !isBrowser()) return null;
+  launchConsumed = true;
+  try {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get(LAUNCH_TOKEN_PARAM);
+    if (token === null || token === "") return null;
+    url.searchParams.delete(LAUNCH_TOKEN_PARAM);
+    window.history.replaceState(null, "", url.toString());
+    return token;
+  } catch {
+    return null;
+  }
+}
+
 function post(message: Record<string, unknown>): void {
   if (!isFramed()) return;
   for (const origin of config.origins) {
@@ -78,10 +114,20 @@ function dashboardToken(): Promise<string> {
       resolve(data.token);
     }
     window.addEventListener("message", onMessage);
-    // TODO(SDK bridge v1): announce `capabilities` + `kit` version in `ready`
-    // (old apps degrade to today's chrome) via the SDK sender.
     post({ type: "ready" });
   });
+}
+
+/** Trade one dashboard token (launch or bridge) for the app's own session bearer. */
+async function exchangeToken(token: string): Promise<string> {
+  const response = await fetch("/admin/session", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: "omit",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Queek did not accept this session. Close the app and open it again.");
+  return ((await response.json()) as { token: string }).token;
 }
 
 async function establish(): Promise<string> {
@@ -95,15 +141,18 @@ async function establish(): Promise<string> {
     return ((await response.json()) as { token: string }).token;
   }
   if (!isFramed()) throw new Error("Open My App from your Queek dashboard.");
-  const token = await dashboardToken();
-  const response = await fetch("/admin/session", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    credentials: "omit",
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error("Queek did not accept this session. Close the app and open it again.");
-  return ((await response.json()) as { token: string }).token;
+  // Signed first load first: the launch token needs no bridge round-trip.
+  // Absent or refused, fall back to the bridge ready→token flow (which also
+  // serves every later 401 refresh — same exchange endpoint, both purposes).
+  const launch = takeLaunchToken();
+  if (launch) {
+    try {
+      return await exchangeToken(launch);
+    } catch {
+      // A refused launch token falls back to the bridge token below.
+    }
+  }
+  return exchangeToken(await dashboardToken());
 }
 
 async function ensureSession(): Promise<string> {

@@ -9,6 +9,12 @@ import "./app.css";
  * cold dark load. Live switches arrive over the bridge (`theme{mode}`) and
  * toggle the class client-side (see bridge.client.ts). A stored mode covers
  * direct loads without the param via the pre-paint inline script below.
+ *
+ * NOTE: SDK 0.6.0's theme helpers (`themeBootstrapScript`,
+ * `getThemeModeFromUrl`, `installThemeListener`) are intentionally NOT
+ * imported here — they ship only behind the package's main entry, whose
+ * barrel breaks the Vite browser build (see bridge.client.ts). Same
+ * behaviour, hand-rolled, until the SDK exports browser-safe subpaths.
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   const theme = new URL(request.url).searchParams.get("theme");

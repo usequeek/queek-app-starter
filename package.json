@@ -26,7 +26,7 @@
     "@radix-ui/react-tabs": "^1.1.21",
     "@react-router/express": "7.18.4",
     "@react-router/node": "7.18.4",
-    "@usequeek/app-sdk": "^0.5.1",
+    "@usequeek/app-sdk": "^0.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "express": "^4.22.3",

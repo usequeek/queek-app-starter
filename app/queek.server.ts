@@ -33,14 +33,16 @@ import type { AppLoadContext } from "./load-context.js";
  * action/loader helpers every route calls. Lazy — importing this module
  * never touches env or disk; `getRuntime()` boots once, on first request.
  *
- * Only SDK 0.5.1 APIs are used here. Newer SDK work (bridge v1 in
- * app-sdk-wt-bridge) is named in TODOs where it will slot in:
- * - TODO(SDK bridge v1): replace the hand-rolled postMessage bridge in
- *   `app/bridge.client.ts` with `installAuthFetch()` + `./react`
- *   `useQueek()` (`toast`, `saveBar`, `pickResource`, `navigate`).
- * - TODO(SDK bridge v1): `sendToast`/`sendTitle`/`sendSaveBar` for the
- *   dashboard title bar + toasts instead of the v0 `ready`/`token`/`resize`
- *   messages below.
+ * SDK 0.6.0: the one exchange in `app/admin-session.ts` takes BOTH
+ * purposes (launch token off the signed first load first, bridge token on
+ * every 401 refresh second), and `app/bridge.client.ts` sends the launch
+ * token when the URL carries one. The client's bridge stays hand-rolled
+ * postMessage (no `./react` `useQueek()` — no page uses toasts/save
+ * bar/pickers yet): the SDK's browser modules ship only behind the main
+ * entry barrel, which the Vite browser build cannot import — see
+ * bridge.client.ts. TODO(SDK browser subpaths): adopt `installAuthFetch()`
+ * + `listenToDashboard`/`sendResize`/`sendNavigated`/`installThemeListener`
+ * once they are importable in browser bundles.
  * - TODO(SDK): `INSUFFICIENT_SCOPE_CODE`/`isInsufficientScope` — drop the
  *   cached installation token and re-mint once on a grant refresh instead
  *   of surfacing merchant_unreachable.
@@ -225,7 +227,7 @@ export function getAdminSession(
 }
 
 /**
- * Verify a dashboard session token ONCE and start an admin session.
+ * Verify a dashboard token (launch or bridge) ONCE and start an admin session.
  * Null for anything that does not verify (see admin-session.ts).
  */
 export function exchangeDashboardToken(
