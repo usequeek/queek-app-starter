@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
-import { verifyLaunchTokenDetailed, verifySessionTokenDetailed } from "@usequeek/app-sdk/server";
+import { verifySessionTokenDetailed } from "@usequeek/app-sdk/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getRuntime } from "../app/queek.server.js";
 import { loader as settingsLoader } from "../app/routes/admin.api.settings.js";
@@ -57,18 +57,20 @@ function handoffRequest(path: string, type: string, data: unknown): Request {
 
 interface MintOptions {
   secret?: string;
-  /** Omitted entirely = the current backend shape (no purpose claim). */
+  /** Legacy extra claim: the backend minted purpose claims until its single-token change lands. */
   purpose?: string;
   expired?: boolean;
+  installationId?: string;
+  audience?: string;
 }
 
-/** A dashboard token exactly as the backend mints it (HS256 under the embed secret). */
+/** A dashboard session token exactly as the backend mints it (HS256 under the embed secret). */
 function dashboardToken(options: MintOptions = {}): string {
   const now = Math.floor(Date.now() / 1000);
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
   const head = encode({ typ: "JWT", alg: "HS256" });
   const body = encode({
-    aud: "my-app",
+    aud: options.audience ?? "my-app",
     iss: API_BASE,
     sub: "user-uuid-merchant",
     sid: randomUUID(),
@@ -76,7 +78,7 @@ function dashboardToken(options: MintOptions = {}): string {
     iat: now,
     nbf: now,
     exp: options.expired ? now - 120 : now + 60,
-    installation_id: INSTALLATION_ID,
+    installation_id: options.installationId ?? INSTALLATION_ID,
     vendor_id: VENDOR_ID,
     app_slug: "my-app",
     app_id: APP_ID,
@@ -119,10 +121,10 @@ function verifyOptions() {
   };
 }
 
-describe("two-purpose session exchange", () => {
-  it("accepts a launch token and the issued session serves API calls", async () => {
+describe("single-token session exchange", () => {
+  it("accepts the first-load URL token and the issued session serves API calls", async () => {
     await install();
-    const response = await exchange(dashboardToken({ purpose: "launch" }), "127.0.0.11");
+    const response = await exchange(dashboardToken(), "127.0.0.11");
     expect(response.status).toBe(200);
     const { token } = (await response.json()) as { token: string };
     const read = await settingsLoader({
@@ -133,52 +135,47 @@ describe("two-purpose session exchange", () => {
     expect(read.status).toBe(200);
   });
 
-  it("accepts a bridge token (purpose session)", async () => {
+  it("accepts a refresh token through the same exchange", async () => {
     await install();
-    const response = await exchange(dashboardToken({ purpose: "session" }), "127.0.0.12");
+    const first = await exchange(dashboardToken(), "127.0.0.12");
+    expect(first.status).toBe(200);
+    const second = await exchange(dashboardToken(), "127.0.0.13");
+    expect(second.status).toBe(200);
+  });
+
+  it.each(["launch", "session"])("accepts a legacy token carrying purpose %s", async (purpose) => {
+    await install();
+    const token = dashboardToken({ purpose });
+    expect(await verifySessionTokenDetailed(token, verifyOptions())).toMatchObject({ ok: true });
+    const response = await exchange(token, "127.0.0.14");
     expect(response.status).toBe(200);
   });
 
-  it("accepts a purpose-less token as a bridge token (current backend)", async () => {
+  it("refuses an expired token", async () => {
     await install();
-    const response = await exchange(dashboardToken(), "127.0.0.13");
-    expect(response.status).toBe(200);
-    expect(await verifySessionTokenDetailed(dashboardToken(), verifyOptions())).toMatchObject({ ok: true });
-  });
-
-  it("refuses a foreign purpose at the exchange", async () => {
-    await install();
-    const response = await exchange(dashboardToken({ purpose: "refresh" }), "127.0.0.14");
+    const response = await exchange(dashboardToken({ expired: true }), "127.0.0.15");
     expect(response.status).toBe(401);
   });
 
-  it("refuses an expired launch token", async () => {
+  it("refuses a forged signature", async () => {
     await install();
-    const response = await exchange(dashboardToken({ purpose: "launch", expired: true }), "127.0.0.15");
+    const response = await exchange(dashboardToken({ secret: "embsec_wrong" }), "127.0.0.16");
     expect(response.status).toBe(401);
   });
 
-  it("refuses a bad signature", async () => {
+  it("refuses a foreign token minted for another installation", async () => {
     await install();
     const response = await exchange(
-      dashboardToken({ purpose: "launch", secret: "embsec_wrong" }),
-      "127.0.0.16",
+      dashboardToken({ installationId: "ffffffff-ffff-ffff-ffff-ffffffffffff" }),
+      "127.0.0.17",
     );
     expect(response.status).toBe(401);
   });
 
-  it("each verifier refuses the other purpose with wrong_purpose", async () => {
-    const launch = dashboardToken({ purpose: "launch" });
-    const bridge = dashboardToken({ purpose: "session" });
-    expect(await verifySessionTokenDetailed(launch, verifyOptions())).toEqual({
-      ok: false,
-      reason: "wrong_purpose",
-    });
-    expect(await verifyLaunchTokenDetailed(bridge, verifyOptions())).toEqual({
-      ok: false,
-      reason: "wrong_purpose",
-    });
-    expect(await verifyLaunchTokenDetailed(launch, verifyOptions())).toMatchObject({ ok: true });
+  it("refuses a token for another audience", async () => {
+    await install();
+    const response = await exchange(dashboardToken({ audience: "other-app" }), "127.0.0.18");
+    expect(response.status).toBe(401);
   });
 
   it("the exchange still works when the installation row is present", async () => {

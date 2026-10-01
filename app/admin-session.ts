@@ -1,10 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { InstallationRecord, InstallationStore } from "@usequeek/app-sdk";
-import {
-  sessionTokenInstallationId,
-  verifyLaunchTokenDetailed,
-  verifySessionTokenDetailed,
-} from "@usequeek/app-sdk/server";
+import { sessionTokenInstallationId, verifySessionTokenDetailed } from "@usequeek/app-sdk/server";
 import { APP_SLUG } from "./config.js";
 
 /**
@@ -12,17 +8,16 @@ import { APP_SLUG } from "./config.js";
  * `queek-app-booking/src/admin-session.ts`, key and prefix renamed).
  *
  * The dashboard frames `GET /admin` with a signed first load
- * (`?queek_token=…`, a LAUNCH-purpose token) and hands the page a
- * short-lived BRIDGE session token by postMessage from the exact
- * dashboard origin on every 401 refresh. The page sends each here ONCE
- * through the SAME exchange callback; it is verified server-side with
- * the SDK (`verifyLaunchTokenDetailed` first, `verifySessionToken`
- * fallback: HS256 under the installation's `embed_secret`, audience =
- * app slug, issuer = the handoff `api_base`, bound to this
- * installation, vendor, slug and the handoff `app_id`). Purpose-less
- * tokens (what the current backend mints) verify as bridge tokens. A
- * valid token starts the app's OWN short session, so admin requests
- * never depend on the dashboard token's 60s life.
+ * (`?queek_token=…`) and answers bridge `ready` requests with the SAME
+ * short-lived session token on every refresh. The page sends each here
+ * ONCE through the SAME exchange callback; it is verified server-side
+ * with the SDK's ONE verifier (`verifySessionTokenDetailed`: HS256 under
+ * the installation's `embed_secret`, audience = app slug, issuer = the
+ * handoff `api_base`, bound to this installation, vendor, slug and the
+ * handoff `app_id`). Extra claims a mint may carry (including the old
+ * launch/bridge `purpose`) are ignored, never gated. A valid token
+ * starts the app's OWN short session, so admin requests never depend on
+ * the dashboard token's 60s life.
  *
  * Carrier: an in-memory session bearer page sends as `Authorization`, NOT a
  * cookie. The page is a cross-site iframe (the dashboard and the app page
@@ -69,14 +64,13 @@ export function bearerToken(header: string | undefined): string | null {
 }
 
 /**
- * Verify a dashboard token ONCE and start an admin session. The exchange
- * takes BOTH purposes through this one callback (SDK `installAuthFetch`):
- * the LAUNCH token off the signed first load, and a BRIDGE token on every
- * 401 refresh — so the launch verifier runs first and the bridge verifier
- * is the fallback. Null for anything that does not verify: unknown
- * installation, missing embed secret or app id (installed before the
- * handoff carried them — reinstall), bad signature, expired, wrong
- * audience/issuer/purpose/binding.
+ * Verify a dashboard token ONCE and start an admin session. ONE token
+ * type (Shopify-lean): the same token arrives in the first-load URL and on
+ * every refresh, so this one callback verifies both with the single
+ * `verifySessionTokenDetailed`. Null for anything that does not verify:
+ * unknown installation, missing embed secret or app id (installed before
+ * the handoff carried them — reinstall), bad signature, expired, wrong
+ * audience/issuer/binding.
  */
 export async function establishAdminSession(
   installations: InstallationLookup,
@@ -89,7 +83,7 @@ export async function establishAdminSession(
   const embedSecret = installation?.embedSecret;
   const appId = installation?.appId;
   if (!installation || !embedSecret || !appId) return null;
-  const options = {
+  const verified = await verifySessionTokenDetailed(dashboardToken, {
     secret: embedSecret,
     audience: APP_SLUG,
     issuer: installation.apiBase.replace(/\/+$/, ""),
@@ -99,12 +93,9 @@ export async function establishAdminSession(
       appSlug: APP_SLUG,
       appId,
     },
-  };
-  const launch = await verifyLaunchTokenDetailed(dashboardToken, options);
-  if (launch.ok) return issueAdminSession(installation, launch.claims.subject, nowSeconds);
-  const bridge = await verifySessionTokenDetailed(dashboardToken, options);
-  if (!bridge.ok) return null;
-  return issueAdminSession(installation, bridge.claims.subject, nowSeconds);
+  });
+  if (!verified.ok) return null;
+  return issueAdminSession(installation, verified.claims.subject, nowSeconds);
 }
 
 /**

@@ -33,16 +33,13 @@ import type { AppLoadContext } from "./load-context.js";
  * action/loader helpers every route calls. Lazy — importing this module
  * never touches env or disk; `getRuntime()` boots once, on first request.
  *
- * SDK 0.6.0: the one exchange in `app/admin-session.ts` takes BOTH
- * purposes (launch token off the signed first load first, bridge token on
- * every 401 refresh second), and `app/bridge.client.ts` sends the launch
- * token when the URL carries one. The client's bridge stays hand-rolled
- * postMessage (no `./react` `useQueek()` — no page uses toasts/save
- * bar/pickers yet): the SDK's browser modules ship only behind the main
- * entry barrel, which the Vite browser build cannot import — see
- * bridge.client.ts. TODO(SDK browser subpaths): adopt `installAuthFetch()`
- * + `listenToDashboard`/`sendResize`/`sendNavigated`/`installThemeListener`
- * once they are importable in browser bundles.
+ * SDK 0.6.1: ONE session token type (Shopify-lean) — the same token
+ * arrives in the first-load URL and on every refresh, so the one exchange
+ * in `app/admin-session.ts` verifies both with the single
+ * `verifySessionTokenDetailed`. Browser code (`app/bridge.client.ts`,
+ * `app/root.tsx`) imports from `@usequeek/app-sdk/browser`
+ * (`installAuthFetch`, frame senders/listeners, theme helpers); no
+ * `./react` `useQueek()` — no page uses toasts/save bar/pickers yet.
  * - TODO(SDK): `INSUFFICIENT_SCOPE_CODE`/`isInsufficientScope` — drop the
  *   cached installation token and re-mint once on a grant refresh instead
  *   of surfacing merchant_unreachable.
@@ -227,7 +224,7 @@ export function getAdminSession(
 }
 
 /**
- * Verify a dashboard token (launch or bridge) ONCE and start an admin session.
+ * Verify a dashboard session token ONCE and start an admin session.
  * Null for anything that does not verify (see admin-session.ts).
  */
 export function exchangeDashboardToken(
