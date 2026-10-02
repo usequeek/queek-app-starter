@@ -7,6 +7,7 @@ import {
   checkSessionThrottle,
   getAdminSession,
   getRuntime,
+  webhookAction as serverWebhookAction,
   sessionThrottleSize,
 } from "../app/queek.server.js";
 import { action as settingsAction, loader as settingsLoader } from "../app/routes/admin.api.settings.js";
@@ -214,6 +215,71 @@ describe("machine routes", () => {
       }),
     } as never);
     expect(response.status).toBe(401);
+  });
+
+  it("webhooks: with two installs, B's secret authenticates against B; an unknown secret 401s", async () => {
+    const secondId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+    const secretA = "whsec_install_a_secret_aaaaaaaaaaaaaaaa";
+    const secretB = "whsec_install_b_secret_bbbbbbbbbbbbbbbb";
+    const installAs = (installationId: string, pid: string, storePid: string, webhookSecret: string) => ({
+      ...installData(),
+      installation: { id: installationId, p_id: pid },
+      store: {
+        id: installationId === INSTALLATION_ID ? VENDOR_ID : "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        p_id: storePid,
+        name: "Shop",
+        is_test: true,
+      },
+      webhook_secret: webhookSecret,
+      embed_secret: `embsec_${randomBytes(32).toString("base64")}`,
+    });
+    for (const payload of [
+      installAs(INSTALLATION_ID, "inst_a", "store_aaa", secretA),
+      installAs(secondId, "inst_b", "store_bbb", secretB),
+    ]) {
+      const installed = await installAction({
+        request: handoffRequest("/install", "app/installed", payload),
+      } as never);
+      expect(installed.status).toBe(200);
+    }
+    const runtime = getRuntime();
+    expect(await runtime.store.getInstallation(INSTALLATION_ID)).not.toBeNull();
+    expect(await runtime.store.getInstallation(secondId)).not.toBeNull();
+
+    const logs: string[] = [];
+    const origInfo = runtime.log.info.bind(runtime.log);
+    runtime.log.info = ((message: string, fields?: Record<string, unknown>) => {
+      logs.push(`${message} ${JSON.stringify(fields)}`);
+      return origInfo(message, fields);
+    }) as typeof runtime.log.info;
+
+    const delivery = (secret: string) => {
+      const body = JSON.stringify({
+        id: `evt-${randomUUID()}`,
+        topic: "orders/updated",
+        api_version: "v1",
+        created_at: new Date().toISOString(),
+        data: { id: "order-b-1", order_number: "ON-B-1", status: "placed" },
+      });
+      return new Request("https://my-app.apps.queek.com.ng/webhooks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Queek-Topic": "orders/updated",
+          ...signedDelivery(body, secret),
+        },
+        body,
+      });
+    };
+
+    // Signed with install B's secret: the try-each-secret lookup must resolve B.
+    const ok = await serverWebhookAction(delivery(secretB));
+    expect(ok.status).toBe(200);
+    expect(logs.some((line) => line.includes("order updated") && line.includes("store_bbb"))).toBe(true);
+
+    // Signed with a secret no install holds: rejected.
+    const forged = await serverWebhookAction(delivery("whsec_unknown_third_secret"));
+    expect(forged.status).toBe(401);
   });
 
   it("webhooks: a stale timestamp answers 401 even with a valid signature", async () => {

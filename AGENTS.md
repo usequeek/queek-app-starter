@@ -8,6 +8,8 @@ skill before writing any app code:
 npx skills add usequeek/queek-ai-toolkit
 ```
 
+If the skill or the live capability document (`https://api.usequeek.com/docs/capabilities.json`) cannot be fetched, say so to the developer, continue with the steps below, and verify every API against the live Merchant spec instead; never assume a capability.
+
 - Layout — handlers live in `app/` (there is no `src/`): install/uninstall/settings handoff in `app/queek.server.ts` + `app/lifecycle.ts` (answer 2xx first, verify the Merchant API after); embedded admin in `app/routes/admin*` (served at `/admin`); `queek.app.toml` is the manifest source of truth (`queek app deploy` runs the real validator).
 - Dev loop: `queek app dev` — tunnel + dev-store install + watch (without the CLI on PATH, prefix every `queek …` command with `npx -y @usequeek/cli`). Requires Node >= 22.14 (`node:sqlite`).
 - SDK (`@usequeek/app-sdk@0.6.1`) entries: main = server/universal code (handlers, client, stores, verifiers — NOT browser-bundlable); `/server` = session-token verifier; `/hono` = Hono wrappers; `/react` = `<QueekProvider>` + `useQueek()`; `/browser` = plain-browser bridge/theme helpers. Browser code imports from `/browser` (or `/react`), never the main entry.
