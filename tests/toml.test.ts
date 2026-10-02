@@ -11,8 +11,9 @@ import { APP_SLUG, DEFAULT_BASE_URL } from "../app/config.js";
  * SUBSET of the backend's `App\Services\Apps\AppManifestValidator` rules
  * (queek_backend).
  *
- * What this mirror deliberately does NOT cover: the full Laratrust scope
- * catalogue (KNOWN_SCOPES below is 5 entries; the backend checks
+ * What this mirror deliberately does NOT cover: scopes the live spec gains
+ * after KNOWN_SCOPES was extracted (the set below is the served
+ * `merchant.json` catalogue with a refresh note — the backend checks
  * `PermissionConstants::ALL_PERMISSIONS`), the URL guard's DNS/SSRF rules
  * (`WebhookUrlGuard::reject`), the dashboard rules, and any future
  * validator rule. Mirror-green NEVER means backend-validator-green.
@@ -44,15 +45,56 @@ import { APP_SLUG, DEFAULT_BASE_URL } from "../app/config.js";
  * - install/uninstall/settings/webhook URLs must be https
  */
 
-// SUBSET of the backend's PermissionConstants::ALL_PERMISSIONS — just enough
-// for this starter's toml. A new app needing other scopes must extend this
-// list (and re-check it against the backend), never assume membership.
+// The live Merchant scope catalogue — extracted 2026-10-02 from
+// https://api.usequeek.com/docs/merchant.json (every `merchant-*` token in
+// the served spec; neither the SDK (`src/scopes.ts` checks shape only) nor
+// the CLI bundles a scope list, so the live spec is the source of truth).
+// Refresh: re-extract, diff, and update this set (the contract is
+// additive under v1, so entries arrive but never leave).
 const KNOWN_SCOPES = new Set([
+  "merchant-app-requirements-write",
+  "merchant-app_alerts-create",
+  "merchant-app_setup-update",
   "merchant-business_profile-read",
-  "merchant-orders-read",
-  "merchant-products-read",
-  "merchant-inventory-read",
+  "merchant-collected-definitions-manage",
+  "merchant-collected-records-submit",
+  "merchant-collections-create",
+  "merchant-collections-read",
+  "merchant-collections-update",
+  "merchant-coupons-create",
+  "merchant-coupons-read",
+  "merchant-customers-contact-read",
+  "merchant-customers-detail",
   "merchant-customers-read",
+  "merchant-discounts-create",
+  "merchant-discounts-detail",
+  "merchant-discounts-read",
+  "merchant-discounts-update",
+  "merchant-inventory-detail",
+  "merchant-inventory-read",
+  "merchant-inventory-update",
+  "merchant-items-create",
+  "merchant-items-delete",
+  "merchant-items-detail",
+  "merchant-items-read",
+  "merchant-items-update",
+  "merchant-locales-read",
+  "merchant-locales-write",
+  "merchant-metafields-create",
+  "merchant-metafields-read",
+  "merchant-metaobjects-create",
+  "merchant-metaobjects-read",
+  "merchant-orders-import",
+  "merchant-orders-read",
+  "merchant-orders-status-update",
+  "merchant-orders-update",
+  "merchant-posts-read",
+  "merchant-shipping-create",
+  "merchant-shipping-read",
+  "merchant-shipping-update",
+  "merchant-stock_adjustments-read",
+  "merchant-translations-read",
+  "merchant-translations-write",
 ]);
 const NON_DELEGABLE_PREFIXES = [
   "merchant-api_keys-",
@@ -212,7 +254,9 @@ function validateManifest(manifest: Record<string, unknown>): string[] {
   } else {
     for (const scope of scopes) {
       if (typeof scope !== "string" || !KNOWN_SCOPES.has(scope)) {
-        errors.push(`Unknown scope '${String(scope)}'. Scopes are Laratrust merchant permission names.`);
+        errors.push(
+          `Unknown scope '${String(scope)}'. Scopes are Merchant API permission names — see the live list at https://api.usequeek.com/docs/merchant/llms.txt.`,
+        );
       } else if (NON_DELEGABLE_PREFIXES.some((prefix) => scope.startsWith(prefix))) {
         errors.push(`The '${scope}' scope can never be granted to an app.`);
       }

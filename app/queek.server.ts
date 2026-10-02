@@ -148,11 +148,13 @@ export function webhookAction(request: Request, runtime: Runtime = getRuntime())
   return handleWebhookRequest(request, {
     store: runtime.store,
     handlers: {
+      // `data` IS the order resource render (OrderResource: id,
+      // order_number, status, … at the top level) — never `{ order }`.
       "orders/updated": async (envelope, context) => {
-        const order = (envelope.data as Record<string, unknown>).order as Record<string, unknown> | undefined;
+        const data = envelope.data as Record<string, unknown>;
         runtime.log.info("order updated", {
           store: context.installation.storePid,
-          order: String(order?.id ?? "unknown"),
+          order: String(data.id ?? data.uid ?? "unknown"),
         });
       },
     },

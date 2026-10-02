@@ -117,8 +117,7 @@ Installations live in SQLite (`QUEEK_DB_PATH`, `./data/my-app.db` locally —
 development only). Production takes `DATABASE_URL` (Postgres, own database)
 instead. `GET /health` must stay unauthenticated.
 
-Needs Node 22 (the SDK stores installations in `node:sqlite`; on Node 22.12
-and earlier run tests with `NODE_OPTIONS=--experimental-sqlite`).
+Needs Node >= 22.14 (the SDK stores installations in `node:sqlite`, stable since 22.14).
 
 ## License
 

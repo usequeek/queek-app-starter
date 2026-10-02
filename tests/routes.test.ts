@@ -176,7 +176,7 @@ describe("machine routes", () => {
       topic: "orders/updated",
       api_version: "v1",
       created_at: new Date().toISOString(),
-      data: { installation: { id: INSTALLATION_ID }, order: { id: "order-1" } },
+      data: { id: "order-1", order_number: "ON-1", status: "placed" },
     });
     const response = await webhookAction({
       request: new Request("https://my-app.apps.queek.com.ng/webhooks", {
@@ -200,7 +200,7 @@ describe("machine routes", () => {
       topic: "orders/updated",
       api_version: "v1",
       created_at: new Date().toISOString(),
-      data: { installation: { id: INSTALLATION_ID }, order: { id: "order-forged" } },
+      data: { id: "order-forged", order_number: "ON-2", status: "placed" },
     });
     const response = await webhookAction({
       request: new Request("https://my-app.apps.queek.com.ng/webhooks", {
@@ -225,7 +225,7 @@ describe("machine routes", () => {
       topic: "orders/updated",
       api_version: "v1",
       created_at: new Date().toISOString(),
-      data: { installation: { id: INSTALLATION_ID }, order: { id: "order-stale" } },
+      data: { id: "order-stale", order_number: "ON-3", status: "placed" },
     });
     const response = await webhookAction({
       request: new Request("https://my-app.apps.queek.com.ng/webhooks", {
