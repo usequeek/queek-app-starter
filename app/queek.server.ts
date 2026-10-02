@@ -12,8 +12,10 @@ import {
   type Logger,
   loadAppCredential,
   type QueekClient,
+  type ResolvedPaths,
 } from "@usequeek/app-sdk";
 import { parse as parseToml } from "smol-toml";
+import type { paths as AppPaths } from "../types/merchant.js";
 import type { AdminSession } from "./admin-session.js";
 import { bearerToken, establishAdminSession, verifyAdminSession } from "./admin-session.js";
 import {
@@ -40,9 +42,9 @@ import type { AppLoadContext } from "./load-context.js";
  * `app/root.tsx`) imports from `@usequeek/app-sdk/browser`
  * (`installAuthFetch`, frame senders/listeners, theme helpers); no
  * `./react` `useQueek()` — no page uses toasts/save bar/pickers yet.
- * - TODO(SDK): `INSUFFICIENT_SCOPE_CODE`/`isInsufficientScope` — drop the
- *   cached installation token and re-mint once on a grant refresh instead
- *   of surfacing merchant_unreachable.
+ * Merchant calls go through `createInstallationClient<AppPaths>` (typed
+ * over the generated `types/merchant.ts`); the SDK drops and re-mints the
+ * cached installation token once on a stale grant (`insufficient_scope`).
  */
 
 export interface Runtime {
@@ -54,7 +56,7 @@ export interface Runtime {
   staticManifest: Record<string, unknown>;
   clientFor: (
     installation: Pick<InstallationRecord, "installationId" | "apiBase">,
-  ) => Pick<QueekClient, "getStore">;
+  ) => Pick<QueekClient<ResolvedPaths<AppPaths>>, "getStore">;
 }
 
 let cached: Runtime | null = null;
@@ -101,7 +103,7 @@ export function createRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
     lifecycle,
     staticManifest,
     clientFor: (installation) =>
-      createInstallationClient({
+      createInstallationClient<AppPaths>({
         installationId: installation.installationId,
         apiBase: installation.apiBase,
         tokens,

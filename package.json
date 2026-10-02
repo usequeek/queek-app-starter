@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "queek app dev",
     "dev:server": "node ./server.js",
+    "codegen": "queek app codegen",
     "deploy": "queek app deploy",
     "build": "react-router build",
     "start": "node ./server.js",

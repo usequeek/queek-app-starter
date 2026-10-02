@@ -10,12 +10,26 @@ plus shadcn with the Queek registry preinstalled.
 Shape (Shopify's template → ours): `app/routes.ts` (`flatRoutes`) →
 `app/routes.ts`; `app/shopify.server.ts` → `app/queek.server.ts` (config,
 store, token minting, install/webhook/session helpers over
-`@usequeek/app-sdk@0.5.1` — newer bridge exports from the SDK worktree are
-named in `TODO(SDK …)` comments, not used); `app/routes/app.*` (Polaris) →
+`@usequeek/app-sdk@0.6.1`); `app/routes/app.*` (Polaris) →
 `app/routes/admin*` (shadcn + Queek registry); `app/entry.server.tsx` adds
 the dashboard-only `frame-ancestors` CSP; `shopify.app.toml` →
 `queek.app.toml`. No `.graphqlrc.ts`: the one Merchant API call
-(`GET /admin/api/store`) goes through the SDK installation client.
+(`GET /admin/api/store`) goes through the SDK installation client, typed
+through `createInstallationClient<AppPaths>` over the generated
+`types/merchant.ts` (refresh with `npm run codegen`).
+
+SDK entries (`@usequeek/app-sdk@0.6.1`): main = server/universal code
+(handlers, client, stores, verifiers — NOT browser-bundlable); `/server` =
+session-token verifier; `/hono` = Hono wrappers; `/react` =
+`<QueekProvider>` + `useQueek()`; `/browser` = plain-browser bridge/theme
+helpers. Browser code imports from `/browser` (or `/react`), never the
+main entry.
+
+Merchant types are generated, not hand-written: `npm run codegen`
+(`queek app codegen`) regenerates the committed `types/merchant.ts` from
+the live Merchant spec (`https://api.usequeek.com/docs/merchant.json`) —
+no login needed, offline runs keep the existing types. Re-run after every
+backend deploy and diff before committing.
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run build

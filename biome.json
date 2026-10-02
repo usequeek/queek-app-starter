@@ -6,7 +6,15 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/build", "!**/node_modules", "!**/data", "!**/.react-router"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/build",
+      "!**/node_modules",
+      "!**/data",
+      "!**/.react-router",
+      "!**/types"
+    ]
   },
   "formatter": {
     "enabled": true,
