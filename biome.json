@@ -13,7 +13,9 @@
       "!**/node_modules",
       "!**/data",
       "!**/.react-router",
-      "!**/types"
+      "!**/types",
+      "!scripts/check-public-text.mjs",
+      "!scripts/check-public-text.test.mjs"
     ]
   },
   "formatter": {

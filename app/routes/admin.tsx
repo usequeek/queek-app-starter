@@ -10,10 +10,10 @@ import {
 import { getRuntime } from "../queek.server.js";
 
 /**
- * The embedded admin shell (Shopify's `app/routes/app.tsx` equivalent):
- * dashboard origins + dev-preview flag for the bridge, app nav for direct
- * loads (inside the dashboard its sidebar carries the menu), then the page.
- * No data is served here; each page exchanges its session client-side.
+ * The embedded admin shell: dashboard origins + dev-preview flag for the
+ * bridge, app nav for direct loads (inside the dashboard its sidebar carries
+ * the menu), then the page. No data is served here; each page exchanges its
+ * session client-side.
  */
 export async function loader() {
   const runtime = getRuntime();
@@ -36,9 +36,8 @@ export default function Admin() {
   useEffect(() => {
     configureBridge({ origins, devPreview });
     startAutoHeight();
-    // TODO(SDK bridge v1): mirror title/actions to the dashboard title bar
-    // (`queek.setTitle(...)`) once `./react` ships; the in-page header below
-    // still serves standalone / direct loads.
+    // The in-page header below serves standalone and direct loads; this shell
+    // does not set the dashboard title bar.
     return onDashboardNavigate((path) => {
       // Granted-prefix half: only /admin or under /admin/ enters the router.
       if (path === "/admin" || path.startsWith("/admin/")) navigate(path);

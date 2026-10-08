@@ -8,11 +8,9 @@ import { dashboardOrigins } from "./queek.server.js";
 export const streamTimeout = 5000;
 
 /**
- * The server entry (Shopify's `app/entry.server.tsx` equivalent): streams
- * the document and stamps the Queek document headers. Embedded admin
- * documents (`/admin*`) are framable by the dashboard only
- * (`frame-ancestors`), never cached or indexed — the same headers the Hono
- * admin router used to set on every admin response.
+ * The server entry: streams the document and stamps the Queek document
+ * headers. Embedded admin documents (`/admin*`) are framable by the
+ * dashboard only (`frame-ancestors`), never cached or indexed.
  */
 export default async function handleRequest(
   request: Request,
@@ -22,11 +20,10 @@ export default async function handleRequest(
 ) {
   const url = new URL(request.url);
   if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
-    // Documents keep no script/style CSP (React Router streams inline
-    // hydration scripts — that needs nonces, a TODO below); the framability
-    // + no-cache + no-index contract stays on every admin document.
-    // TODO(CSP nonces): per-request nonce plumbed to <Scripts> for
-    // `script-src 'nonce-…'`, matching the old SPA shell's locked policy.
+    // Admin documents set no script/style CSP: React Router streams inline
+    // hydration scripts, which a strict `script-src` would block without a
+    // per-request nonce. The framability, no-cache and no-index headers
+    // apply to every admin document.
     responseHeaders.set("Content-Security-Policy", `frame-ancestors ${dashboardOrigins().join(" ")}`);
     responseHeaders.set("Cache-Control", "no-store");
     responseHeaders.set("X-Robots-Tag", "noindex, nofollow");

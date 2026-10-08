@@ -51,7 +51,7 @@ export function parseOrigins(raw: string, name: string): string[] {
  * Map the grouped `queek.app.toml` onto the flat manifest shape (the same
  * groups the CLI deploys: top level, [listing], [access], [webhooks], [app],
  * [[settings]], [extensions], [dashboard]). No validation here — `queek app
- * deploy` runs the real backend validator; this only flattens so boot and
+ * deploy` runs the real manifest validation; this only flattens so boot and
  * tests read the same file the deploy ships.
  */
 export function staticManifestFromToml(doc: Record<string, unknown>): Record<string, unknown> {
@@ -188,8 +188,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error(`Invalid APP_ENCRYPTION_KEY: ${error instanceof Error ? error.message : "undecodable"}`);
   }
   // The asymmetric app key mints short-lived installation tokens (no
-  // store-callable key ever crosses the install handoff any more). The PEM
-  // must parse as RSA here, once — never mid-mint.
+  // store-callable key crosses the install handoff). The PEM must parse as
+  // RSA here, once — never mid-mint.
   const appKeyId = required("APP_KEY_ID", env);
   const appPrivateKey = required("APP_PRIVATE_KEY", env);
   try {

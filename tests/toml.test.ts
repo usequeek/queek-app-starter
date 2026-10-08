@@ -6,51 +6,44 @@ import { describe, expect, it } from "vitest";
 import { APP_SLUG, DEFAULT_BASE_URL } from "../app/config.js";
 
 /**
- * PARTIAL MIRROR — NOT the backend validator. This starter's queek.app.toml,
- * mapped onto the flat manifest shape and checked against a hand-copied
- * SUBSET of the backend's `App\Services\Apps\AppManifestValidator` rules
- * (queek_backend).
+ * A local check of this starter's queek.app.toml. The grouped toml is mapped
+ * onto the flat manifest shape and checked against a hand-copied subset of
+ * the manifest rules `queek app deploy` enforces, so a typo in the toml fails
+ * here first.
  *
- * What this mirror deliberately does NOT cover: scopes the live spec gains
- * after KNOWN_SCOPES was extracted (the set below is the served
- * `merchant.json` catalogue with a refresh note — the backend checks
- * `PermissionConstants::ALL_PERMISSIONS`), the URL guard's DNS/SSRF rules
- * (`WebhookUrlGuard::reject`), the dashboard rules, and any future
- * validator rule. Mirror-green NEVER means backend-validator-green.
+ * Not covered: scopes added to the live spec after KNOWN_SCOPES was
+ * extracted, the safety checks on webhook receiver URLs (DNS rules), the
+ * dashboard rules, and any rule added later. A green run here does not mean
+ * `queek app deploy` accepts the manifest — deploy runs the full validation.
+ * When the deploy rules change, update this copy to match.
  *
- * SOURCE OF TRUTH IS THE BACKEND: `queek app deploy` runs the real
- * validator. This test exists so a typo'd toml fails here first — if the
- * backend validator changes, this mirror must be updated to match.
- *
- * Mirrored rules:
+ * Rules checked:
  * - top-level keys: slug, name, version, distribution, icon, developer,
  *   category, description, tagline, description_long, highlights, logo_url,
  *   pricing, developer_url, privacy_url, support_url, scopes, webhook_topics,
  *   settings, install_url, uninstall_url, settings_url, webhook_url
- *   (unknown rejected)
- * - extensions: ONLY proxy/blocks/merchant_page_url/nav (the live
- *   `AppManifestValidator::validateExtensions` rejectUnknown list) —
- *   merchant_page_url and proxy.url must be https; nav mirrors
- *   `validateNav`/`assertNavPath` (≤10 entries of {label, path}, label ≤40
- *   chars without control characters, path ≤2048 chars, 5-round decoded,
- *   no `..`/scheme/backslash, single leading `/`, under the merchant page
- *   path prefix, and refused without a merchant_page_url)
+ *   (unknown keys are rejected)
+ * - extensions: ONLY proxy/blocks/merchant_page_url/nav — merchant_page_url
+ *   and proxy.url must be https; nav is at most 10 entries of {label, path},
+ *   label up to 40 chars without control characters, path up to 2048 chars,
+ *   decoded fully (up to 5 rounds), no `..`/scheme/backslash, a single
+ *   leading `/`, under the merchant page path prefix, and refused without a
+ *   merchant_page_url
  * - slug `^[a-z0-9][a-z0-9-]{1,63}$`, name ≤120, icon `^[a-z0-9_-]+$` ≤64
  * - scopes non-empty; each a known merchant permission and NOT under a
  *   non-delegable prefix (merchant-api_keys/roles/users/employees/pos/apps-)
- * - webhook_topics ⊆ the 11-topic catalogue (App\Enums\WebhookTopic);
- *   topics require webhook_url
+ * - webhook_topics ⊆ the 11-topic catalogue; topics require webhook_url
  * - settings fields: key `^[a-z0-9_]{1,64}$`, label ≤120,
  *   type ∈ string|secret|number|boolean|select, options required iff select
  * - install/uninstall/settings/webhook URLs must be https
  */
 
-// The live Merchant scope catalogue — extracted 2026-10-02 from
+// The live Merchant scope catalogue, extracted from
 // https://api.usequeek.com/docs/merchant.json (every `merchant-*` token in
-// the served spec; neither the SDK (`src/scopes.ts` checks shape only) nor
-// the CLI bundles a scope list, so the live spec is the source of truth).
-// Refresh: re-extract, diff, and update this set (the contract is
-// additive under v1, so entries arrive but never leave).
+// the served spec). The SDK checks scope shape only and the CLI bundles no
+// scope list, so the live spec is the source of truth. Refresh: re-extract,
+// diff, and update this set (the API is additive within v1: entries are
+// added, never removed).
 const KNOWN_SCOPES = new Set([
   "merchant-app-requirements-write",
   "merchant-app_alerts-create",
@@ -191,9 +184,9 @@ const NAV_LABEL_MAX = 40;
 const NAV_PATH_MAX = 2048;
 
 /**
- * Mirrors `AppManifestValidator::assertNavPath`: decode fully (repeatedly —
- * the browser resolves %2e as `.`, so one pass would let %252e%252e walk
- * out), then the shape rules, then the merchant-page prefix bound.
+ * Nav path rules: decode fully (repeatedly — the browser resolves %2e as `.`,
+ * so one pass would let %252e%252e walk out), then the shape rules, then the
+ * merchant-page prefix bound.
  */
 const hasControlChars = (value: string): boolean =>
   [...value].some((ch) => {
@@ -314,7 +307,7 @@ function validateManifest(manifest: Record<string, unknown>): string[] {
       for (const key of Object.keys(extensions)) {
         if (!["proxy", "blocks", "merchant_page_url", "nav"].includes(key)) {
           errors.push(
-            `Unknown extensions key '${key}': the backend allows only proxy/blocks/merchant_page_url/nav.`,
+            `Unknown extensions key '${key}': only proxy/blocks/merchant_page_url/nav are allowed.`,
           );
         }
       }
@@ -406,13 +399,13 @@ function validateManifest(manifest: Record<string, unknown>): string[] {
 
 const TOML_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "queek.app.toml");
 
-describe("queek.app.toml mirror", () => {
-  it("parses and passes the backend-rule subset", () => {
+describe("queek.app.toml", () => {
+  it("parses and passes the manifest rule subset", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     expect(validateManifest(toManifest(doc))).toEqual([]);
   });
 
-  it("carries no version (Shopify parity: backend auto-assigns, --version names)", () => {
+  it("carries no version (deploy assigns it; --version only names it)", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     expect(doc.version).toBeUndefined();
   });
@@ -423,7 +416,7 @@ describe("queek.app.toml mirror", () => {
     const extensions = manifest.extensions as Record<string, unknown>;
     expect(extensions.merchant_page_url).toBe(`${DEFAULT_BASE_URL}/admin`);
     // Nothing shipped under nav yet — but a live-style entry under the
-    // merchant page prefix passes the mirror (sidebar entries are shippable).
+    // merchant page prefix passes (sidebar entries are shippable).
     const withNav = {
       ...manifest,
       extensions: { ...extensions, nav: [{ label: "Settings", path: "/admin/settings" }] },
@@ -431,7 +424,7 @@ describe("queek.app.toml mirror", () => {
     expect(validateManifest(withNav)).toEqual([]);
   });
 
-  it("mirrors validateNav: nav needs the merchant page and prefix-bound safe paths", () => {
+  it("nav needs the merchant page and prefix-bound safe paths", () => {
     const doc = parseToml(readFileSync(TOML_PATH, "utf8")) as unknown as TomlDoc;
     const manifest = toManifest(doc);
     const extensions = manifest.extensions as Record<string, unknown>;

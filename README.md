@@ -1,19 +1,17 @@
 # My App
 
 A [Queek](https://usequeek.com) installable app, from
-[`usequeek/queek-app-starter`](https://github.com/usequeek/queek-app-starter).
-Shaped like Shopify's React Router template (`shopify app init`): a
-full-stack React Router app — server loaders and actions over
+[`usequeek/queek-app-starter`](https://github.com/usequeek/queek-app-starter):
+a full-stack React Router app — server loaders and actions over
 [`@usequeek/app-sdk`](https://www.npmjs.com/package/@usequeek/app-sdk) —
 plus shadcn with the Queek registry preinstalled.
 
-Shape (Shopify's template → ours): `app/routes.ts` (`flatRoutes`) →
-`app/routes.ts`; `app/shopify.server.ts` → `app/queek.server.ts` (config,
-store, token minting, install/webhook/session helpers over
-`@usequeek/app-sdk@0.6.1`); `app/routes/app.*` (Polaris) →
-`app/routes/admin*` (shadcn + Queek registry); `app/entry.server.tsx` adds
-the dashboard-only `frame-ancestors` CSP; `shopify.app.toml` →
-`queek.app.toml`. No `.graphqlrc.ts`: the one Merchant API call
+Layout: `app/routes.ts` (`flatRoutes`) defines the routes;
+`app/queek.server.ts` holds config, the installation store, token minting
+and the install/webhook/session helpers (over `@usequeek/app-sdk@0.6.1`);
+`app/routes/admin*` is the embedded admin UI (shadcn + Queek registry);
+`app/entry.server.tsx` adds the dashboard-only `frame-ancestors` CSP;
+`queek.app.toml` is the app manifest. The one Merchant API call
 (`GET /admin/api/store`) goes through the SDK installation client, typed
 through `createInstallationClient<AppPaths>` over the generated
 `types/merchant.ts` (refresh with `npm run codegen`).
@@ -28,8 +26,8 @@ main entry.
 Merchant types are generated, not hand-written: `npm run codegen`
 (`queek app codegen`) regenerates the committed `types/merchant.ts` from
 the live Merchant spec (`https://api.usequeek.com/docs/merchant.json`) —
-no login needed, offline runs keep the existing types. Re-run after every
-backend deploy and diff before committing.
+no login needed, offline runs keep the existing types. Re-run it when the
+Merchant API changes and diff before committing.
 
 ```bash
 npm run typecheck && npm run lint && npm test && npm run build
@@ -107,7 +105,7 @@ machine) signs in as the dev install via `POST /admin/dev-session`
 
 ## Routes
 
-`GET /health` (Dokploy check) · `/install` · `/uninstall` · `/settings`
+`GET /health` (your host's health check) · `/install` · `/uninstall` · `/settings`
 (handoff, signature-verified) · `POST /webhooks` (`orders/updated`) ·
 `GET /manifest.json` (the toml rendered with `APP_BASE_URL`) ·
 `/admin` (embedded home + settings, session-guarded JSON under

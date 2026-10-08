@@ -15,8 +15,8 @@ RUN npm prune --omit=dev
 FROM node:22.23.3-alpine AS runtime
 # Runs as non-root (app), production mode, and a capped V8 heap: idle RSS
 # measures ~50-60 MB, so --max-old-space-size=96 leaves headroom while keeping
-# worst-case RSS just under the 128 MB container limit Dokploy enforces
-# (the cgroup is the hard backstop).
+# worst-case RSS just under a typical 128 MB container limit (the cgroup is
+# the hard backstop).
 ENV NODE_ENV=production \
     PORT=3000 \
     QUEEK_DB_PATH=/app/data/my-app.db \

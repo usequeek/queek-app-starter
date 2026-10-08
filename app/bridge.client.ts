@@ -222,7 +222,7 @@ export function reportNavigated(path: string): void {
 }
 
 /**
- * A dashboard-sent app path is safe to route when it mirrors the backend's
+ * A dashboard-sent app path is safe to route when it satisfies the manifest
  * nav rule: decode fully (repeatedly — the browser resolves %2e as `.`),
  * then no controls, no scheme, no backslashes, a single leading `/`, no
  * `..` segments. The granted-prefix half (`/admin` or under `/admin/`) is

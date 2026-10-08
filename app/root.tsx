@@ -4,13 +4,12 @@ import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData } from "
 import "./app.css";
 
 /**
- * The document shell (Shopify's `app/root.tsx` equivalent). `theme` is a
- * plain unsigned URL param (`?theme=light|dark`, the dashboard's resolved
- * theme), so the first paint already carries `<html class="dark">` — no
- * light flash on a cold dark load. Live switches arrive over the bridge
- * (`theme{mode}`) and override it client-side (see bridge.client.ts). A
- * stored mode covers direct loads without the param via the SDK pre-paint
- * inline script below.
+ * The document shell. `theme` is a plain unsigned URL param
+ * (`?theme=light|dark`, the dashboard's resolved theme), so the first paint
+ * already carries `<html class="dark">` — no light flash on a cold dark
+ * load. Live switches arrive over the bridge (`theme{mode}`) and override
+ * it client-side (see bridge.client.ts). A stored mode covers direct loads
+ * without the param via the SDK pre-paint inline script below.
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   return { theme: getThemeModeFromUrl(request.url) };

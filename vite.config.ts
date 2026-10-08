@@ -2,8 +2,8 @@ import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
-// Like Shopify's template (vite.config.ts): the tunnel origin replaces HOST
-// so the Vite server allows it, and the port follows the injected PORT.
+// The tunnel origin replaces HOST so the Vite server allows it, and the port
+// follows the injected PORT.
 if (process.env.HOST && (!process.env.APP_BASE_URL || process.env.APP_BASE_URL === process.env.HOST)) {
   process.env.APP_BASE_URL = process.env.HOST;
   delete process.env.HOST;

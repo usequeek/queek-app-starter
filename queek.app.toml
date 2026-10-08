@@ -30,13 +30,11 @@ help = "Logged when an order update arrives."
 [extensions]
 merchant_page_url = "https://my-app.apps.queek.com.ng/admin"
 
-# NOTE: no [[extensions.nav]] entries ship yet, but they are deployable:
-# the live backend validator (AppManifestValidator::validateExtensions on
-# origin/master) allows proxy/blocks/merchant_page_url/nav and checks nav
-# with validateNav — every path must live under the merchant_page_url path
-# prefix (5-round decode, no `..`/scheme/backslash), so entries like
-# `{ label = "Settings", path = "/admin/settings" }` pass `queek app deploy`.
-# tests/toml.test.ts mirrors that validator subset.
+# No [[extensions.nav]] entries ship yet, but they are deployable: every nav
+# path must live under the merchant_page_url path prefix (decoded fully, with
+# no `..`, scheme or backslash), so an entry like
+# `{ label = "Settings", path = "/admin/settings" }` passes `queek app deploy`.
+# tests/toml.test.ts checks the same rules locally.
 
 [dev]
 command = "node ./server.js"

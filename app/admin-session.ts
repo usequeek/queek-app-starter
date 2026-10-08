@@ -4,8 +4,7 @@ import { sessionTokenInstallationId, verifySessionTokenDetailed } from "@usequee
 import { APP_SLUG } from "./config.js";
 
 /**
- * Merchant admin sessions for the EMBEDDED app page (the Booking pattern:
- * `queek-app-booking/src/admin-session.ts`, key and prefix renamed).
+ * Merchant admin sessions for the EMBEDDED app page.
  *
  * The dashboard frames `GET /admin` with a signed first load
  * (`?queek_token=…`) and answers bridge `ready` requests with the SAME
@@ -64,9 +63,9 @@ export function bearerToken(header: string | undefined): string | null {
 }
 
 /**
- * Verify a dashboard token ONCE and start an admin session. ONE token
- * type (Shopify-lean): the same token arrives in the first-load URL and on
- * every refresh, so this one callback verifies both with the single
+ * Verify a dashboard token ONCE and start an admin session. ONE token type:
+ * the same token arrives in the first-load URL and on every refresh, so this
+ * one callback verifies both with the single
  * `verifySessionTokenDetailed`. Null for anything that does not verify:
  * unknown installation, missing embed secret or app id (installed before
  * the handoff carried them — reinstall), bad signature, expired, wrong

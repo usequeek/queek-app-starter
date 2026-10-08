@@ -57,14 +57,14 @@ function handoffRequest(path: string, type: string, data: unknown): Request {
 
 interface MintOptions {
   secret?: string;
-  /** Legacy extra claim: the backend minted purpose claims until its single-token change lands. */
+  /** Legacy extra claim: older tokens carry a `purpose` claim, which verification ignores. */
   purpose?: string;
   expired?: boolean;
   installationId?: string;
   audience?: string;
 }
 
-/** A dashboard session token exactly as the backend mints it (HS256 under the embed secret). */
+/** A dashboard session token as Queek mints it (HS256 under the embed secret). */
 function dashboardToken(options: MintOptions = {}): string {
   const now = Math.floor(Date.now() / 1000);
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value), "utf8").toString("base64url");

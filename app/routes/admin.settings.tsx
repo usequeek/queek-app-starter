@@ -40,8 +40,7 @@ export default function AdminSettings() {
     try {
       const saved = await api<{ greeting: string }>("PUT", "/settings", { greeting });
       setGreeting(saved.greeting);
-      // TODO(SDK bridge v1): confirm over the bridge (`queek.toast({…})`)
-      // instead of this inline notice once `./react` ships.
+      // The save is confirmed with an inline notice.
       setNotice({ tone: "ok", text: "Saved." });
     } catch (error: unknown) {
       setNotice({

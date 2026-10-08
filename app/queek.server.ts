@@ -30,14 +30,14 @@ import { buildLifecycle } from "./lifecycle.js";
 import type { AppLoadContext } from "./load-context.js";
 
 /**
- * The Queek wiring (Shopify's `app/shopify.server.ts` equivalent): config,
- * installation store, token minting, lifecycle callbacks, and the shared
- * action/loader helpers every route calls. Lazy — importing this module
- * never touches env or disk; `getRuntime()` boots once, on first request.
+ * The Queek wiring: config, installation store, token minting, lifecycle
+ * callbacks, and the shared action/loader helpers every route calls. Lazy —
+ * importing this module never touches env or disk; `getRuntime()` boots
+ * once, on first request.
  *
- * SDK 0.6.1: ONE session token type (Shopify-lean) — the same token
- * arrives in the first-load URL and on every refresh, so the one exchange
- * in `app/admin-session.ts` verifies both with the single
+ * SDK 0.6.1: ONE session token type — the same token arrives in the
+ * first-load URL and on every refresh, so the one exchange in
+ * `app/admin-session.ts` verifies both with the single
  * `verifySessionTokenDetailed`. Browser code (`app/bridge.client.ts`,
  * `app/root.tsx`) imports from `@usequeek/app-sdk/browser`
  * (`installAuthFetch`, frame senders/listeners, theme helpers); no
@@ -78,7 +78,7 @@ export function createRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
     sqlitePath: config.dbPath,
   });
   // The app credential mints short-lived installation tokens: no
-  // store-callable key ever crosses the install handoff any more.
+  // store-callable key crosses the install handoff.
   const tokens = createAppTokenProvider({
     credential: loadAppCredential({
       appSlug: APP_SLUG,

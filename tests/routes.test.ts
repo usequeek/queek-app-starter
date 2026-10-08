@@ -77,7 +77,7 @@ async function install(): Promise<void> {
   expect(response.status).toBe(200);
 }
 
-/** A dashboard session token exactly as the backend mints it (HS256 under the embed secret). */
+/** A dashboard session token as Queek mints it (HS256 under the embed secret). */
 function dashboardToken(secret: string = EMBED_SECRET): string {
   const now = Math.floor(Date.now() / 1000);
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
@@ -414,8 +414,8 @@ describe("admin session", () => {
       }),
     } as never);
     // Touch the second row last: the store stamps updated_at on every save,
-    // so this makes "most recent" unambiguous (the old first-match code
-    // would still return the first install here).
+    // so this makes "most recent" unambiguous (a first-match lookup would
+    // still return the first install here).
     const runtime = getRuntime();
     const second = await runtime.store.getInstallation(secondId);
     if (!second) throw new Error("second install did not store a row");

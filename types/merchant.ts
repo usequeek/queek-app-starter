@@ -1225,8 +1225,7 @@ export interface components {
                 original: string | null;
                 primary_variant_image: string | null;
                 /**
-                 * @description Additive — see decision_tree.json image-variants-contract-pr1/2.
-                 *     null when the primary image isn't Media-backed (raw URL only) or
+                 * @description Additive. null when the primary image isn't Media-backed (raw URL only) or
                  *     'variants' wasn't eager-loaded; existing keys above are unaffected.
                  */
                 image_variants: {
@@ -1812,13 +1811,13 @@ export interface components {
         };
         /**
          * MerchantShippingZoneRequest
-         * @description POST shipping-zones / PUT shipping-zones/{zone} on the Merchant API.
+         * @description POST shipping-zones / PUT shipping-zones/{zone} on the merchant API.
          *
-         *     The dashboard zone rules, except the rates: the public API speaks money as
-         *     decimal strings in the currency's major unit ("1500.00", or a number), the
-         *     same format Api\ShippingZoneResource reads back, so a read round-trips into
-         *     a write. ShippingZoneService::ratesToMinor() turns them into the kobo a zone
-         *     stores; the dashboard keeps sending kobo integers.
+         *     Zone rules match the dashboard's, except the rates: this API speaks money as
+         *     decimal strings in the currency's major unit ("1500.00", or a number) — the
+         *     same shape a zone read returns, so a read round-trips into a write. Values
+         *     are stored in the currency's minor unit; the dashboard sends minor-unit
+         *     integers directly.
          */
         MerchantShippingZoneRequest: {
             name: string;
@@ -1889,7 +1888,7 @@ export interface components {
         };
         /**
          * MetaobjectDataClass
-         * @description What KIND of data a metaobject definition holds. `content` is merchant content (designers, size charts): entries may be storefront-visible and carry their own pages. `collected` is data gathered FROM people (form submissions, applications): entries are never storefront-readable and never revalidate the storefront. The booleans (`storefront_visible`, `has_pages`) stay the permanent source of truth — a collected definition is simply forced storefront-off at all three write layers (FormRequest, MetaobjectDefinitionService, model guard).
+         * @description What KIND of data a metaobject definition holds. `content` is merchant content (designers, size charts): entries may be storefront-visible and carry their own pages. `collected` is data gathered FROM people (form submissions, applications): entries are never storefront-readable and never revalidate the storefront. The booleans (`storefront_visible`, `has_pages`) stay the permanent source of truth — a collected definition is always stored with both off, however it is written.
          * @enum {string}
          */
         MetaobjectDataClass: "content" | "collected";
@@ -1970,11 +1969,9 @@ export interface components {
          * MetaobjectRequest
          * @description Create/update a metaobject entry on the REST developer surface.
          *
-         *     Shape rules only live here (`type` exists, `handle` is slug-shaped, `status`
-         *     is known). WHAT a field may hold is known solely by the definition, so each
-         *     key is checked in the after-validation pass through MetaobjectWriter — the
-         *     same writer the AI facade uses, so both surfaces refuse the same payload
-         *     with the same `fields.{key}` errors.
+         *     Shape is checked first (`type` exists, `handle` is slug-shaped, `status` is
+         *     known). Each field value is then validated against its definition — an
+         *     unknown key or a wrong-typed value fails with a `fields.{key}` error.
          */
         MetaobjectRequest: {
             type: string;
@@ -2232,11 +2229,10 @@ export interface components {
             approved?: string | null;
             price: number;
             /**
-             * @description Product-level identity/pricing for products WITHOUT variants
-             *     (Shopify default-variant parity). Prohibited the moment
-             *     variants are in play — variants carry their own
-             *     sku/compare_at_price and the product-level pair is ignored
-             *     there, never merged.
+             * @description Product-level identity/pricing for products WITHOUT variants.
+             *     Prohibited the moment variants are in play — variants carry
+             *     their own sku/compare_at_price and the product-level pair is
+             *     ignored there, never merged.
              */
             sku?: string | null;
             compare_at_price?: number | null;
@@ -2857,7 +2853,7 @@ export interface components {
         /**
          * StoreVendorLocaleRequest
          * @description POST locales {locale} — enable a catalogue locale on the store. The code
-         *     must come from config/locales.php; anything else is a 422, never a guess.
+         *     must be a supported catalogue code; anything else is a 422, never a guess.
          */
         StoreVendorLocaleRequest: {
             /** @enum {string} */
@@ -2879,15 +2875,11 @@ export interface components {
         };
         /**
          * UpdateAppSetupNoticeRequest
-         * @description The installation-bound setup write (PUT app/setup, merchant API,
-         *     installation key only). ONE write path for the merchant-visible values an
-         *     app gives its installer: the install/settings handoff 2xx body stays
-         *     ignored, and the app calls here after it answers 2xx, once its key is
-         *     active.
+         * @description Store the calling installation's merchant-visible setup values (PUT
+         *     app/setup). Call it once the installation's key is active.
          *
-         *     Full-body PUT (the resource's one update verb): status + the whole items
-         *     sheet every time, so a retry replays instead of merging. Lengths come from
-         *     config/apps.php app_setup with the same defaults beside them; values that
+         *     Full-body PUT — send status plus the whole items sheet every time, so a
+         *     retry replays instead of merging. Length limits apply per field; values that
          *     look like URLs must be https (a token-bearing http URL would train the
          *     merchant to paste secrets into cleartext).
          */
@@ -3071,26 +3063,26 @@ export interface components {
         };
         /**
          * VendorOrderExtensionRequest
-         * @description PATCH /api/v1/biz/vendor/orders/{order} — the developer-extension fields of an
-         *     order, and nothing else.
+         * @description PATCH orders/{order} — the developer-extension fields of an order, and
+         *     nothing else.
          *
-         *     The route reads like a general order update because that is the shape an
-         *     integrator expects, but an order's state is NOT editable here: status,
-         *     cancellation, rider assignment and shipment each have their own endpoint with
-         *     their own ability and their own side effects (stock, settlement, notifications,
-         *     webhooks). So any field outside the allowed set is REJECTED by name rather than
-         *     ignored — an integrator who believes they cancelled an order by PATCHing
-         *     `status` must find out from a 422, not from an order that shipped anyway.
+         *     An order's state is NOT editable here: status, cancellation, rider
+         *     assignment and shipment each have their own endpoint with their own side
+         *     effects (stock, settlement, notifications, webhooks). Any field outside the
+         *     allowed set is rejected by name with a 422 rather than ignored — an
+         *     integrator who tries to cancel an order by PATCHing `status` learns it from
+         *     the error, not from an order that shipped anyway.
          *
-         *     `line_items` merges per-line properties by key (OrderLinePropertiesWriter):
-         *     an app mirrors what it booked or issued onto the line it belongs to. Who
-         *     may write which keys follows the metafields rule: an app installation key
-         *     writes ONLY under its own `app.{slug}.` namespace (the BB1b derivation,
-         *     AppInstallService::declarationNamespaceFor, resolved from the calling key
-         *     alone); every other caller — the dashboard session, a store key — writes
-         *     any checkout-shaped key EXCEPT the app-owned `app.*` / `queek.*` ones
-         *     (MetafieldWriter::isAppOwnedNamespace), so no merchant can forge or clear an
-         *     app's keys. Keys and values obey the checkout caps.
+         *     `metafields` must reference an existing definition for orders and never use
+         *     an app-owned (`app.*`, `queek.*`) namespace on this endpoint. `metadata` is
+         *     free-form integrator bookkeeping — replaced wholesale (`null` clears it),
+         *     capped in size and count, with no namespace rule and no definitions.
+         *     `line_items` merges per-line properties by key: an app mirrors what it
+         *     booked or issued onto the line it belongs to. Property keys from an app
+         *     installation key must live under its own `app.{slug}.` namespace; any other
+         *     caller writes any checkout-shaped key EXCEPT the app-owned `app.*` /
+         *     `queek.*` ones, so no merchant can forge or clear an app's keys. Keys and
+         *     values obey the documented caps.
          */
         VendorOrderExtensionRequest: {
             metafields?: {
@@ -3216,9 +3208,9 @@ export interface components {
                 risk_level: string | "Not assessed";
             };
             /**
-             * @description A key caller never receives team contact or roles on a store-profile
-             *     read (founder decision 1, 23/9/26 — the contact scope is about
-             *     CUSTOMERS, never staff), whatever scopes it holds: name only.
+             * @description Team contacts on a store-profile read: a store-key caller receives
+             *     names only — contact details and roles are never included,
+             *     whatever scopes the key holds.
              */
             management: {
                 owner: {
@@ -3313,7 +3305,7 @@ export interface components {
              */
             is_test?: boolean;
             /**
-             * @description S-E: the core storefront renders a password page for dev
+             * @description The core storefront renders a password page for dev
              *     stores. One flag per fact: dev_store says WHAT it is,
              *     password_required gates the token; this response itself
              *     stays public — gated reads 401. indexable:false tells the
