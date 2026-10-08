@@ -14,8 +14,7 @@
       "!**/data",
       "!**/.react-router",
       "!**/types",
-      "!scripts/check-public-text.mjs",
-      "!scripts/check-public-text.test.mjs"
+      "!.github/scripts"
     ]
   },
   "formatter": {

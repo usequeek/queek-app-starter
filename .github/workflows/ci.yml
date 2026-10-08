@@ -13,6 +13,8 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - run: node .github/scripts/check-public-text.mjs
+      - run: node --test .github/scripts/check-public-text.test.mjs
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
