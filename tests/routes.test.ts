@@ -130,6 +130,17 @@ describe("machine routes", () => {
     expect(await response.json()).toMatchObject({ ok: true, app: "my-app" });
   });
 
+  it("GET /health answers 503 without leaking the reason when the runtime cannot boot", async () => {
+    restore();
+    restore = useRuntime({ QUEEK_APP_SECRET: "" });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const response = await healthLoader();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ ok: false, app: "my-app" });
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("QUEEK_APP_SECRET"));
+    logged.mockRestore();
+  });
+
   it("GET /manifest.json renders the toml with APP_BASE_URL", async () => {
     const response = await manifestLoader();
     expect(response.status).toBe(200);

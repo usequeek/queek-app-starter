@@ -26,7 +26,7 @@ import {
   renderManifest,
   staticManifestFromToml,
 } from "./config.js";
-import { buildLifecycle } from "./lifecycle.js";
+import { buildLifecycle, failureFields } from "./lifecycle.js";
 import type { AppLoadContext } from "./load-context.js";
 
 /**
@@ -35,7 +35,7 @@ import type { AppLoadContext } from "./load-context.js";
  * importing this module never touches env or disk; `getRuntime()` boots
  * once, on first request.
  *
- * SDK 0.6.1: ONE session token type — the same token arrives in the
+ * ONE session token type — the same token arrives in the
  * first-load URL and on every refresh, so the one exchange in
  * `app/admin-session.ts` verifies both with the single
  * `verifySessionTokenDetailed`. Browser code (`app/bridge.client.ts`,
@@ -70,8 +70,11 @@ export function setQueekFetchImpl(impl: typeof fetch): void {
 export function createRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const config = loadConfig(env);
   const log = createLogger({ service: `queek-app-${APP_SLUG}` });
-  if (config.dbPath !== ":memory:") mkdirSync(dirname(config.dbPath), { recursive: true });
   // DATABASE_URL set (production) → Postgres; otherwise SQLite (local dev).
+  // The SQLite directory is only created when SQLite is the store.
+  if (!env.DATABASE_URL && config.dbPath !== ":memory:") {
+    mkdirSync(dirname(config.dbPath), { recursive: true });
+  }
   const store = createInstallationStore({
     storeKey: config.storeKey,
     databaseUrl: env.DATABASE_URL,
@@ -299,9 +302,10 @@ export async function storeProfileFor(
   try {
     const profile = await runtime.clientFor(installation).getStore();
     return { ok: true, store: profile };
-  } catch {
+  } catch (error) {
     runtime.log.error("admin Merchant API check failed", {
       installation: (installation as InstallationRecord).installationPid ?? installation.installationId,
+      ...failureFields(error),
     });
     return { ok: false };
   }
