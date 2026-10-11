@@ -2,7 +2,7 @@
 // Public-text guard: fails when a tracked text file carries an internal
 // reference or a secret-shaped string. Zero dependencies.
 //
-//   node scripts/check-public-text.mjs [repo-dir]
+//   node .github/scripts/check-public-text.mjs [repo-dir]
 //
 // Exit 0 = clean, 1 = findings, 2 = bad usage or a bad allow-list.
 //
@@ -29,6 +29,8 @@ export const RULES = [
   { id: "rendering-bug", re: /\[object Objec[t]\]/i },
   { id: "plan-id", re: /plan T[0-9]/i },
   { id: "decision-id", re: /decision [0-9]+/i },
+  // Other commerce platforms and big-tech products are never named, not even as a comparison.
+  { id: "competitor-name", re: /\b(Shop[i]fy|Woo[C]ommerce|Big[C]ommerce|Mage[n]to|Square[s]pace|Wi[x]|Web[f]low|Sales[f]orce|Med[u]sa|Sal[e]or|E[t]sy|Ama[z]on|Twi[l]io|Ver[c]el|Word[P]ress)\b/i },
   { id: "secret-key", re: /sk_(live|test)_[A-Za-z0-9]{10,}/i, secret: true },
   { id: "github-token", re: /ghp_[A-Za-z0-9]{20,}/i, secret: true },
   { id: "private-key", re: /BEGIN [A-Z ]*PRIVATE KEY/i, secret: true },
