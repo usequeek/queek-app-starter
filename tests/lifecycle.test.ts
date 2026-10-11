@@ -1,11 +1,11 @@
-import { type AppTokens, createLogger, SqliteInstallationStore } from "@usequeek/app-sdk";
+import { type AppTokens, createLogger, QueekApiError, SqliteInstallationStore } from "@usequeek/app-sdk";
 import { describe, expect, it, vi } from "vitest";
-import { buildLifecycle } from "../app/lifecycle.js";
+import { buildLifecycle, failureFields } from "../app/lifecycle.js";
 
 const STORE_KEY = Buffer.alloc(32, 9).toString("base64");
 const INSTALLATION_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
-/** Stub token minting: the merchant fake sees the same static key as before S1. */
+/** Stub token minting: the merchant fake sees a fixed test key. */
 const stubTokens: AppTokens = {
   acquireToken: async () => "sk_test_key",
   dropCachedToken: async () => undefined,
@@ -184,5 +184,22 @@ describe("install lifecycle", () => {
     const row = await store.getInstallation(INSTALLATION_ID);
     expect(row?.settings).toEqual({ greeting: "hi" });
     expect(row?.installedAt).toBe(row?.updatedAt);
+  });
+});
+
+describe("failureFields", () => {
+  it("surfaces status, code and request id of a Queek API error, never its message", () => {
+    const error = new QueekApiError({
+      status: 403,
+      code: "insufficient_scope",
+      message: "secret detail that must not be logged",
+      requestId: "req_123",
+    });
+    expect(failureFields(error)).toEqual({ status: 403, code: "insufficient_scope", request_id: "req_123" });
+  });
+
+  it("names the error class for anything else", () => {
+    expect(failureFields(new TypeError("boom"))).toEqual({ reason: "TypeError" });
+    expect(failureFields("nope")).toEqual({ reason: "unknown" });
   });
 });

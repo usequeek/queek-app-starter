@@ -23,7 +23,7 @@ import { APP_SLUG } from "./config.js";
  * live on different sites), where cookies are third-party: Safari blocks
  * them outright and Chrome only keeps them partitioned (CHIPS) or while
  * third-party cookies are allowed — a session that silently vanishes by
- * browser. A header session bearer the same in every browser, is CSRF-proof
+ * browser. A header session bearer behaves the same in every browser, is CSRF-proof
  * by construction (a cross-site form cannot set a header) and is gone with
  * the frame.
  *
@@ -99,8 +99,8 @@ export async function establishAdminSession(
 
 /**
  * Sign an admin session for an installation. The ONE issuer: the dashboard
- * token path above and the local dev preview (`admin.ts`, development +
- * loopback only) both end here. Null when the installation has no embed
+ * token path above and the local dev preview (`routes/admin.dev-session.tsx`,
+ * development + loopback only) both end here. Null when the installation has no embed
  * secret (installed before the handoff carried it — reinstall).
  */
 export function issueAdminSession(

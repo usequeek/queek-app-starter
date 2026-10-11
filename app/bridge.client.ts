@@ -8,8 +8,8 @@ import {
 } from "@usequeek/app-sdk/browser";
 
 /**
- * Session + dashboard bridge for the embedded admin (client-only), on SDK
- * 0.6.1 browser primitives (`@usequeek/app-sdk/browser` — the main entry
+ * Session + dashboard bridge for the embedded admin (client-only), on the SDK
+ * browser primitives (`@usequeek/app-sdk/browser` — the main entry
  * barrel cannot load in browser bundles, so browser code imports from
  * there; no alias, no deep `dist/` imports).
  *
@@ -20,7 +20,7 @@ import {
  * bearer, and attaches it to every same-origin fetch (cookies stay out —
  * cross-site iframe, no cookies). A 401 re-establishes via the bridge
  * `ready→token` flow and retries once. Opened directly on this machine in
- * development: `POST /admin/dev-session` instead. The session Bearer [REDACTED] in
+ * development: `POST /admin/dev-session` instead. The session bearer lives in
  * memory only.
  *
  * Theme rides the SDK too: `?theme=` is a plain unsigned URL param for

@@ -5,22 +5,35 @@ import {
   type InstallationStore,
   type InstallEnvelope,
   type Logger,
+  QueekApiError,
   RESYNC_EVENT,
   type ResyncEnvelope,
   saveResyncedInstallation,
 } from "@usequeek/app-sdk";
 
+/** Log fields that say why a Merchant API call failed, without echoing the message body. */
+export function failureFields(error: unknown): Record<string, string | number> {
+  if (error instanceof QueekApiError) {
+    return {
+      status: error.status,
+      code: error.code,
+      ...(error.requestId ? { request_id: error.requestId } : {}),
+    };
+  }
+  return { reason: error instanceof Error ? error.name : "unknown" };
+}
+
 export interface StarterLifecycleDeps {
   store: InstallationStore;
-  /** Mints the installation tokens every Queek call goes through (S1). */
+  /** Mints the short-lived installation tokens every Queek call goes through. */
   tokens: AppTokens;
   log: Logger;
   queekFetchImpl?: typeof fetch;
 }
 
 /**
- * Install / uninstall lifecycle (importable without booting the server —
- * index.ts only wires these into Hono).
+ * Install / uninstall lifecycle. Importable without booting the server, so
+ * tests call it directly; `app/queek.server.ts` wires it into the SDK handlers.
  *
  * Install saves the handoff then answers 2xx FIRST: Queek activates the
  * installation only after this handler returns 2xx, and refuses token
@@ -63,9 +76,10 @@ export function buildLifecycle(deps: StarterLifecycleDeps) {
             installation: data.installation.p_id,
           });
         })
-        .catch(() =>
+        .catch((error: unknown) =>
           deps.log.error("post-install Merchant API check failed", {
             installation: data.installation.p_id,
+            ...failureFields(error),
           }),
         );
     }, 1_000);
