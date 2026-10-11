@@ -1,11 +1,15 @@
-# One Docker image for THIS app (build context = this repo root):
+# One image for this app. Build context: the repository root.
+#
 #   docker build -t my-app .
-# No secrets are baked in — every secret arrives as environment at run time
-# (see .env.example).
+#   docker run --init -p 3000:3000 --env-file .env -e DATABASE_URL=postgres://... my-app
+#
+# No secret is baked in. Every secret arrives as an environment variable at
+# run time (see .env.example). Production needs DATABASE_URL: the app refuses
+# to start on SQLite when NODE_ENV=production.
 
 FROM node:22.23.3-alpine AS build
 WORKDIR /repo
-# The committed lockfile pins every dependency (incl. @usequeek/app-sdk from npm).
+# The lockfile pins every dependency, including @usequeek/app-sdk.
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
@@ -13,23 +17,22 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 FROM node:22.23.3-alpine AS runtime
-# Runs as non-root (app), production mode, and a capped V8 heap: idle RSS
-# measures ~50-60 MB, so --max-old-space-size=96 leaves headroom while keeping
-# worst-case RSS just under a typical 128 MB container limit (the cgroup is
-# the hard backstop).
+# Production mode, and a V8 old-space cap below the container's memory limit.
+# 192 MB assumes a 256 MB container: leave room for buffers and native memory,
+# and raise both numbers together if your app grows.
 ENV NODE_ENV=production \
     PORT=3000 \
-    QUEEK_DB_PATH=/app/data/my-app.db \
-    NODE_OPTIONS=--max-old-space-size=96
+    NODE_OPTIONS=--max-old-space-size=192
 WORKDIR /app
-COPY --from=build /repo/build ./build
-COPY --from=build /repo/server.js ./server.js
-COPY --from=build /repo/node_modules ./node_modules
-COPY --from=build /repo/package.json ./package.json
-COPY --from=build /repo/queek.app.toml ./queek.app.toml
-RUN mkdir -p /app/data && addgroup -S app && adduser -S app -G app && chown -R app:app /app
-USER app
+COPY --from=build --chown=node:node /repo/build ./build
+COPY --from=build --chown=node:node /repo/server.js /repo/loopback.js /repo/package.json /repo/queek.app.toml ./
+COPY --from=build --chown=node:node /repo/node_modules ./node_modules
+# The image ships the unprivileged `node` user; nothing here needs root.
+USER node
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+# /health answers 503 until the config validates and the store opens, so a
+# container with missing secrets is reported unhealthy, not green.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/health" || exit 1
+# server.js handles SIGTERM and SIGINT itself and drains in-flight requests.
 CMD ["node", "server.js"]

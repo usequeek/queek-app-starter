@@ -10,9 +10,20 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 describe("deploy ships the built app", () => {
   it("Dockerfile copies the build output and the server into the runtime image", () => {
     const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
-    expect(dockerfile).toContain("COPY --from=build /repo/build ./build");
+    expect(dockerfile).toContain("/repo/build ./build");
     expect(dockerfile).toContain("server.js");
     expect(dockerfile).not.toContain("dist-admin");
+  });
+
+  it("Dockerfile ships every module server.js imports, runs unprivileged and checks /health", () => {
+    const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
+    const server = readFileSync(join(ROOT, "server.js"), "utf8");
+    for (const [, local] of server.matchAll(/from "\.\/([^"]+\.js)"/g)) {
+      expect(dockerfile, `Dockerfile must copy ${local}`).toContain(`/repo/${local}`);
+    }
+    expect(dockerfile).toMatch(/^USER node$/m);
+    expect(dockerfile).toContain("HEALTHCHECK");
+    expect(dockerfile).toContain("/health");
   });
 
   it("the server starts the build (never react-router-serve without the loopback context)", () => {

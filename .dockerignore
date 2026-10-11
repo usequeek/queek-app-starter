@@ -1,6 +1,14 @@
 node_modules
 dist
+.react-router
 .git
+.github
 .queek
 data
+tests
+*.db
+*.db-wal
+*.db-shm
 .env
+.env.*
+!.env.example
