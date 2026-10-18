@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLoaderData, useLocation, useNavigate } from "react-router";
 import {
   configureBridge,
@@ -32,9 +32,18 @@ export default function Admin() {
   const { origins, devPreview } = useLoaderData<typeof loader>();
   const location = useLocation();
   const navigate = useNavigate();
+  // `bridge.client` is empty during server rendering, so whether the page is
+  // framed is read after mount, never while rendering.
+  const [framed, setFramed] = useState(true);
+  // A child page calls the API from its own effects, and React runs those
+  // BEFORE this shell's effects. The pages mount only once the bridge is
+  // configured, or their first call would fail.
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     configureBridge({ origins, devPreview });
+    setFramed(getIsFramed());
+    setReady(true);
     startAutoHeight();
     // The in-page header below serves standalone and direct loads; this shell
     // does not set the dashboard title bar.
@@ -45,8 +54,9 @@ export default function Admin() {
   }, [origins, devPreview, navigate]);
 
   useEffect(() => {
-    reportNavigated(location.pathname);
-  }, [location.pathname]);
+    // Path and query: a reload or a shared link must land on the same view.
+    reportNavigated(location.pathname + location.search);
+  }, [location.pathname, location.search]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -62,12 +72,12 @@ export default function Admin() {
         </nav>
       </header>
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-6">
-        {!getIsFramed() && devPreview ? (
+        {!framed && devPreview ? (
           <p className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
             Local preview: signed in as the dev install.
           </p>
         ) : null}
-        <Outlet />
+        {ready ? <Outlet /> : null}
       </main>
     </div>
   );
