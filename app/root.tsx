@@ -1,7 +1,16 @@
 import { getThemeModeFromUrl, themeBootstrapScript } from "@usequeek/app-sdk/browser";
-import type { LoaderFunctionArgs } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLoaderData } from "react-router";
+import "@fontsource-variable/inter/opsz.css";
+import "@fontsource-variable/geist-mono";
+import interLatin from "@fontsource-variable/inter/files/inter-latin-opsz-normal.woff2?url";
 import "./app.css";
+
+// Inter is self-hosted and preloaded, so the first paint already uses it.
+// Geist Mono (ids, code) loads on demand.
+export const links: LinksFunction = () => [
+  { rel: "preload", href: interLatin, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+];
 
 /**
  * The document shell. `theme` is a plain unsigned URL param

@@ -63,7 +63,7 @@ export default function AdminHome() {
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <p className="font-medium">{state.name || "Unnamed store"}</p>
-            <p className="font-mono text-xs text-muted-foreground">{state.pid}</p>
+            <p className="font-mono text-xs tabular-nums text-muted-foreground">{state.pid}</p>
           </CardContent>
         </Card>
       ) : null}
